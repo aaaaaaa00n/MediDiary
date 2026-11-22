@@ -1,4 +1,7 @@
 // ai/GemmaEngine.kt
+package com.medidiary.app.ai
+
+/** Returns the model's raw text output (expected: JSON per CLAUDE.md §3.1). */
 interface GemmaEngine {
     suspend fun extract(transcript: String): String
 }
