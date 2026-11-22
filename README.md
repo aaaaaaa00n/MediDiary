@@ -98,6 +98,15 @@ this off in Settings → Advanced. The proposal requires live AI in the demo, so
 
 ### Matching your fine-tune's prompt format
 
+**Verified against the training notebook (`gemma3.ipynb`):** the model was trained with Unsloth's `gemma-3` chat
+template on `system` + `user` + `assistant` messages. That renders as
+`<bos><start_of_turn>user\n{SYSTEM_PROMPT}\n\n{transcript}<end_of_turn>\n<start_of_turn>model\n`, which is exactly
+what llama.cpp's built-in Gemma handler produces with the default setting (chat template **on**). The system prompt in
+`domain/Prompts.kt` is byte-identical to the notebook's `SYSTEM_PROMPT`, and `PromptsTest` keeps it that way.
+Training used `max_seq_length = 1024`, so the app's default context is also 1024.
+
+General notes for other fine-tunes:
+
 Extraction sends the exact system prompt from `claude.md` §3.2 (`domain/Prompts.kt`). By default the prompt is wrapped
 with the GGUF's embedded chat template (Gemma's `<start_of_turn>user … <start_of_turn>model`; Gemma has no system
 role, so the system prompt is merged into the user turn). If your fine-tuning data used a different layout, either:
