@@ -117,6 +117,20 @@ role, so the system prompt is merged into the user turn). If your fine-tuning da
 Decoding is greedy (temperature 0.0) and stops as soon as the top-level JSON object closes. The default context
 is 1024 tokens because Bangla transcripts tokenise long. Change it in Settings → Advanced.
 
+### Recommended Whisper model
+
+Use [SayedShaun/bengali-whisper-medium-ggml](https://huggingface.co/SayedShaun/bengali-whisper-medium-ggml). It is already in
+whisper.cpp format, so **no conversion is needed**: download one `.bin`, rename it to `medidiary-whisper.bin` and push it.
+
+| file | size | notes |
+|---|---|---|
+| `ggml-model-q6_k.bin` | 610 MB | best quality per byte; start here |
+| `ggml-model-q4_0.bin` | 424 MB | faster and smaller; use it if q6_k is too slow on the demo phone |
+| `ggml-model-q2_k.bin` | 254 MB | avoid: the author warns it can hallucinate or drop words |
+
+This is a *medium* model (~769M params), so speed on a phone CPU is the main risk. Time a 20–30 s clip on the demo
+phone (the transcript screen shows the on-device time) before choosing between q6_k and q4_0.
+
 ### Whisper language
 
 Settings → Speech language: `bn` (default), `en`, or auto-detect for code-switched speech.
@@ -155,7 +169,7 @@ The transcript and review screens show on-device timings for the evaluation writ
 
 ## References & acknowledgements
 
-1. OpenAI Whisper (MIT).
+1. OpenAI Whisper (MIT). Speech model: [SayedShaun/bengali-whisper-medium-ggml](https://huggingface.co/SayedShaun/bengali-whisper-medium-ggml) (Apache-2.0), a whisper.cpp conversion of SayedShaun/bengali-whisper-medium, fine-tuned from openai/whisper-medium.
 2. whisper.cpp and its Android example (MIT).
 3. Gemma 3 1B. Gemma is provided under and subject to the Gemma Terms of Use (ai.google.dev/gemma/terms).
 4. llama.cpp and its Android integration (MIT).

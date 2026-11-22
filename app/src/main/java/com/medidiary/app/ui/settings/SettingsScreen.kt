@@ -149,7 +149,8 @@ fun SettingsScreen(vm: SettingsViewModel) {
         Section("About") {
             Text(
                 "Patient-reported & AI-assisted, not medically verified. MediDiary does not give diagnoses, dosages or " +
-                    "interaction advice.\n\nSpeech: OpenAI Whisper via whisper.cpp (MIT). Extraction: Gemma 3 1B via " +
+                    "interaction advice.\n\nSpeech: OpenAI Whisper via whisper.cpp (MIT); Bengali model SayedShaun/bengali-whisper-medium " +
+                    "(Apache-2.0, fine-tuned from openai/whisper-medium). Extraction: Gemma 3 1B via " +
                     "llama.cpp (MIT); Gemma is provided under and subject to the Gemma Terms of Use. Brand/generic reference: " +
                     "subset of the Bangladesh DGDA registered-drug list (DGHS Bangladesh Core FHIR IG); suggestions only.",
                 style = MaterialTheme.typography.bodySmall,
