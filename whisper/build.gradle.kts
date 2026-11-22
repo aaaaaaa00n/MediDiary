@@ -4,6 +4,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+// ABIs to build. Default: real arm64 phones only (fast builds). For the x86_64 emulator run
+// ./gradlew ... -Pmedidiary.abis=arm64-v8a,x86_64   (or edit gradle.properties)
+val medidiaryAbis = (findProperty("medidiary.abis") as String? ?: "arm64-v8a")
+    .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
 android {
     namespace = "com.medidiary.whisper"
     compileSdk = 35
@@ -12,7 +17,7 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
-        ndk { abiFilters += listOf("arm64-v8a") }
+        ndk { abiFilters += medidiaryAbis }
         externalNativeBuild {
             cmake {
                 arguments += listOf(

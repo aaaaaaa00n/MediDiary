@@ -5,6 +5,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// ABIs to build. Default: real arm64 phones only (fast builds). For the x86_64 emulator run
+// ./gradlew ... -Pmedidiary.abis=arm64-v8a,x86_64   (or edit gradle.properties)
+val medidiaryAbis = (findProperty("medidiary.abis") as String? ?: "arm64-v8a")
+    .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
 android {
     namespace = "com.medidiary.app"
     compileSdk = 35
@@ -19,7 +24,7 @@ android {
 
         ndk {
             // Only build for modern 64-bit ARM phones (fast builds)
-            abiFilters.add("arm64-v8a")
+            abiFilters += medidiaryAbis
         }
         externalNativeBuild {
             cmake {

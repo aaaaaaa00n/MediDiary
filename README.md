@@ -44,6 +44,8 @@ whisper.cpp and llama.cpp never clash.
 
 ## Build
 
+**Step-by-step setup for Windows and Fedora (Android Studio, emulator, device, troubleshooting): [`docs/DEVELOPING.md`](docs/DEVELOPING.md).**
+
 Requirements: Android Studio (Ladybug or newer), JDK 17, **NDK 27.2.12479018**, CMake 3.22.1 (install both from
 SDK Manager → SDK Tools).
 
