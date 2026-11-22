@@ -121,6 +121,15 @@ is 1024 tokens because Bangla transcripts tokenise long. Change it in Settings �
 
 Settings → Speech language: `bn` (default), `en`, or auto-detect for code-switched speech.
 
+## Training notebooks (`training/`)
+
+Both notebooks run in Google Colab.
+
+| Notebook | Purpose |
+|---|---|
+| `gemma3_medidiary_v2.ipynb` | Re-trains the Gemma 3 1B extractor for better **symptom recall**. It adds about 1,000 synthetic multi-symptom check-ins (labelled so that `name` = the words as spoken), turns packing off, and adds negation and planned-medicine negatives. It reports strict and lenient P/R/F1, re-checks the **quantised GGUF with llama.cpp** using the app's exact prompt, and saves `medidiary-gemma.gguf` to Drive. |
+| `whisper_hf_to_ggml.ipynb` | Converts the Hugging Face Whisper fine-tune (full or LoRA) to whisper.cpp ggml with the **same whisper.cpp version as the app** (v1.9.5), optionally quantises it, smoke-tests it on a Bangla clip and saves `medidiary-whisper.bin`. |
+
 ## DGDA reference data: please review
 
 `app/src/main/assets/dgda/dgda_medicines.csv` (brand → generic) and `dgda_aliases.csv` (Bangla spellings → brand)
