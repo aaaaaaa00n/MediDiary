@@ -14,9 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Export ranges offered under "EXPORT TO". days = null means every saved entry. */
-enum class ExportRange(val label: String, val days: Int?) { WEEK("Last 7 days", 7), MONTH("Last 30 days", 30), ALL("All", null) }
-
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as MediDiaryApp).container
     val settings = c.settings.settings

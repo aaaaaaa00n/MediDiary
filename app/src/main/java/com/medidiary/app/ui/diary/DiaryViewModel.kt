@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.medidiary.app.MediDiaryApp
 import com.medidiary.app.data.db.DiaryRecord
 import com.medidiary.app.domain.RecordType
+import java.util.Calendar
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,12 +14,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
-
-enum class TypeFilter(val label: String) { ALL("All"), MEDICINES("Medicines"), SYMPTOMS("Symptoms") }
-
-/** Which kinds of entry a calendar day has (drives the dots under each date). */
-data class DayMarks(val medicine: Boolean, val symptom: Boolean)
 
 /** Backs the CALENDAR / DATES panel: month grid, per-day entries, edit and delete. */
 class DiaryViewModel(app: Application) : AndroidViewModel(app) {
