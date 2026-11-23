@@ -1,14 +1,21 @@
 package com.medidiary.app.ui.settings
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.medidiary.app.MediDiaryApp
 import com.medidiary.app.ai.ModelKind
 import com.medidiary.app.data.AppSettings
+import com.medidiary.app.ui.diary.DateUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Export ranges offered under "EXPORT TO". days = null means every saved entry. */
+enum class ExportRange(val label: String, val days: Int?) { WEEK("Last 7 days", 7), MONTH("Last 30 days", 30), ALL("All", null) }
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as MediDiaryApp).container
@@ -16,6 +23,8 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val models = c.modelManager.status
     val importing = MutableStateFlow<Pair<ModelKind, Long>?>(null)
     val message = MutableStateFlow<String?>(null)
+    val exportRange = MutableStateFlow(ExportRange.MONTH)
+    val exporting = MutableStateFlow(false)
 
     val externalModelDir: String get() = c.modelManager.externalDirPath()
 
@@ -23,11 +32,13 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.update(transform)
     }
 
+    /** 30, 60 or a custom number of days (1–365). */
     fun setRetention(days: Int) {
-        c.settings.update { it.copy(retentionDays = days) }
+        val d = days.coerceIn(1, 365)
+        c.settings.update { it.copy(retentionDays = d) }
         viewModelScope.launch {
-            val removed = c.diaryRepository.applyRetention(days)
-            if (removed > 0) message.value = "Removed $removed entries older than $days days."
+            val removed = c.diaryRepository.applyRetention(d)
+            message.value = if (removed > 0) "Removed $removed entries older than $d days." else "Entries are kept for $d days."
         }
     }
 
@@ -44,6 +55,25 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteModel(kind: ModelKind) = c.modelManager.delete(kind)
+
+    fun export(pdf: Boolean, onReady: (Intent) -> Unit) = viewModelScope.launch {
+        val range = exportRange.value
+        val now = System.currentTimeMillis()
+        val from = range.days?.let { DateUtils.daysAgo(it, now) } ?: 0L
+        val to = DateUtils.endOfDay(now)
+        exporting.value = true
+        runCatching {
+            val rows = c.diaryRepository.between(from, to)
+            if (rows.isEmpty()) error("No saved entries in ${range.label.lowercase()}.")
+            val firstDay = if (range.days == null) rows.minOf { it.loggedDate } else from
+            withContext(Dispatchers.IO) {
+                val name = c.settings.settings.value.patientName
+                if (pdf) c.exportManager.exportPdf(rows, name, firstDay, to) else c.exportManager.exportCsv(rows, name)
+            }
+        }.onSuccess { onReady(c.exportManager.shareIntent(it)) }
+            .onFailure { message.value = it.message ?: "Export failed" }
+        exporting.value = false
+    }
 
     fun deleteAllData() = viewModelScope.launch {
         c.diaryRepository.deleteAll()

@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MediDiary" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Catppuccin Mocha base so there is no white flash before Compose draws. -->
+    <style name="Theme.MediDiary" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/mocha_base</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">#FFF7F9FC</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorAccent">@color/mocha_blue</item>
     </style>
 </resources>

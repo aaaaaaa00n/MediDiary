@@ -7,12 +7,12 @@ import com.medidiary.app.data.db.DgdaAlias
 import com.medidiary.app.data.db.DgdaMedicine
 
 /**
- * Loads the DGDA reference subset from `assets/dgda/*.csv` into Room. Re-seeds whenever
+ * Loads the DGDA reference subset from `assets/dgda/ CSV files` into Room. Re-seeds whenever
  * [SEED_VERSION] is bumped, so Dev 2 can edit the CSVs without writing a Room migration.
  * The CSV files are plain text on purpose: easy to review against the DGDA registry.
  */
 object DgdaSeeder {
-    /** Bump after editing assets/dgda/*.csv */
+    /** Bump after editing assets/dgda/ CSV files */
     const val SEED_VERSION = 1
     private const val PREFS = "dgda_seed"
 
