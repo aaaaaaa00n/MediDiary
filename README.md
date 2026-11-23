@@ -74,8 +74,6 @@ publishes it as a GitHub Release. The workflow fails if the APK ever gains a net
 (so CI builds update each other on the demo phone), add the repository secrets `MEDIDIARY_KEYSTORE_BASE64`,
 `MEDIDIARY_KEYSTORE_PASSWORD`, `MEDIDIARY_KEY_ALIAS` and `MEDIDIARY_KEY_PASSWORD`.
 
-**Step-by-step setup for Windows and Fedora (Android Studio, emulator, device, troubleshooting): [`docs/DEVELOPING.md`](docs/DEVELOPING.md).**
-
 Requirements: Android Studio (Ladybug or newer), JDK 17, **NDK 27.2.12479018**, CMake 3.22.1 (install both from
 SDK Manager → SDK Tools).
 

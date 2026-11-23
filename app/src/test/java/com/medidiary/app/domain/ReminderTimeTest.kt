@@ -28,6 +28,16 @@ class ReminderTimeTest {
         assertEquals(at(2026, 11, 1, 21, 0, ny), next)
     }
 
+    @Test fun labelUsesAsciiDigitsOnBanglaPhones() {
+        val saved = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("bn-BD"))
+            assertEquals("9:00 PM", ReminderTime.label(21, 0))
+        } finally {
+            java.util.Locale.setDefault(saved)
+        }
+    }
+
     @Test fun labels() {
         assertEquals("9:00 PM", ReminderTime.label(21, 0))
         assertEquals("12:05 AM", ReminderTime.label(0, 5))

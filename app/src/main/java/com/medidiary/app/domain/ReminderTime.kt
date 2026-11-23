@@ -1,9 +1,10 @@
 package com.medidiary.app.domain
 
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
-/** Pure scheduling maths for the daily check-in reminder (shared by Android and desktop, unit-tested). */
+/** Pure scheduling maths for the daily check-in reminder (no Android dependencies, unit-tested). */
 object ReminderTime {
     /** Next time [hour]:[minute] occurs strictly after [now] in [tz] (today if still ahead, else tomorrow). DST-safe. */
     fun nextTrigger(now: Long, hour: Int, minute: Int, tz: TimeZone = TimeZone.getDefault()): Long {
@@ -21,7 +22,8 @@ object ReminderTime {
     /** "9:00 PM" style label (the app UI is English; the notification itself is bilingual). */
     fun label(hour: Int, minute: Int): String {
         val h12 = if (hour % 12 == 0) 12 else hour % 12
-        return "%d:%02d %s".format(h12, minute, if (hour < 12) "AM" else "PM")
+        // Locale.US: ASCII digits like the rest of the UI (a Bangla-locale phone would otherwise print "৯:০০").
+        return String.format(Locale.US, "%d:%02d %s", h12, minute, if (hour < 12) "AM" else "PM")
     }
 
     /** Start of the local day containing [now] — used to check "already logged today". */
