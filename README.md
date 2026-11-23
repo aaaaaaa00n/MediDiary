@@ -68,6 +68,11 @@ whisper.cpp and llama.cpp never clash.
 
 ## Build
 
+[![Android APK](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml/badge.svg)](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml)
+
+**Ready-made APKs:** every push builds one in GitHub Actions (*Actions → Android APK → Artifacts*). Tagging `v1.0.0`
+publishes it as a GitHub Release. See [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §11.1.
+
 **Step-by-step setup for Windows and Fedora (Android Studio, emulator, device, troubleshooting): [`docs/DEVELOPING.md`](docs/DEVELOPING.md).**
 
 Requirements: Android Studio (Ladybug or newer), JDK 17, **NDK 27.2.12479018**, CMake 3.22.1 (install both from

@@ -338,8 +338,73 @@ The images in `docs/screenshots/` were rendered from these same preview function
   The output is `app/build/outputs/apk/release/app-release.apk`. Release builds are signed with the debug key so they can be side-loaded.
 - **Direct APK link for judges:** create a **GitHub Release** and attach the APK. Models aren't in the APK, so the README explains how to load them.
 - **Same signing key across team machines:** an APK built on one laptop can't update an install from another laptop (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). For the demo phone, always install from one machine, or uninstall first.
-- **CI (optional):** GitHub Actions can build the APK on `ubuntu-latest`. The steps are checkout with `submodules: recursive`, JDK 17, then `./gradlew :app:assembleRelease`, uploading the APK as an artifact or Release asset.
+- **CI builds (GitHub Actions)** are described in §11.1.
 
+### 11.1 GitHub Actions: `.github/workflows/android-apk.yml`
+
+| Trigger | What happens |
+|---|---|
+| Push to `main` (or a `claude/**` branch), any pull request, or *Run workflow* | Unit tests → release APK → checks → APK uploaded to the run |
+| Push a tag `v*` (e.g. `v1.0.0`) | All of the above **plus a GitHub Release** with the APK attached (the direct link for judges) |
+
+Every build checks three things and **fails if any is missing or wrong**:
+1. The APK contains **no** `INTERNET` / `ACCESS_NETWORK_STATE` permission (core rule #1).
+2. It contains `libmedidiary_whisper.so` and `libmedidiary_llama.so` for arm64.
+3. It is properly signed.
+
+The run's **Summary** page shows the APK size, SHA-256, version and signing key.
+
+**Download a build:** *Actions → Android APK → pick a run → Artifacts → `MediDiary-<version>.apk`* (a plain APK, not a zip;
+requires being logged in to GitHub). Artifacts are kept for 30 days.
+
+**Publish a release for the demo / judges:**
+```bash
+git tag v1.0.0
+```
+
+```bash
+git push origin v1.0.0
+```
+About 15–25 minutes later, *Releases* has `MediDiary-1.0.0.apk` with a public download link.
+
+**Build time:** the first run compiles whisper.cpp and llama.cpp, about 15–25 min. Later runs reuse the Gradle and native
+(`.cxx`) caches when `third_party/` and the C++ code are unchanged.
+
+**Versioning:** `versionCode` = the workflow run number, so each CI build is "newer" and installs over the previous one.
+`versionName` is the tag (`v1.2.0` → `1.2.0`) or `1.0.0-ci.<run>`.
+
+#### Fixed signing key (recommended before the demo)
+Without a key, each CI run signs with a throw-away debug key. Installing a newer CI build then fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` until you uninstall, and uninstalling **deletes the diary and the models**.
+To avoid that, give CI one permanent key:
+
+1. Create a keystore once and keep it somewhere safe (**never commit it**; `*.jks` is git-ignored):
+   ```bash
+   keytool -genkeypair -v -keystore medidiary-release.jks -alias medidiary -keyalg RSA -keysize 2048 -validity 10000
+   ```
+2. Base64-encode it. On Linux:
+   ```bash
+   base64 -w0 medidiary-release.jks > keystore.b64
+   ```
+   On Windows PowerShell:
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("medidiary-release.jks")) | Out-File -Encoding ascii keystore.b64
+   ```
+3. In GitHub, go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+
+   | Secret | Value |
+   |---|---|
+   | `MEDIDIARY_KEYSTORE_BASE64` | contents of `keystore.b64` |
+   | `MEDIDIARY_KEYSTORE_PASSWORD` | the keystore password |
+   | `MEDIDIARY_KEY_ALIAS` | `medidiary` |
+   | `MEDIDIARY_KEY_PASSWORD` | the key password (same as the keystore password if you pressed Enter) |
+
+4. Delete `keystore.b64`. The next run's summary should say *Signing: release key (secrets)*.
+
+To build locally with the same key, export the same four `MEDIDIARY_*` variables, with `MEDIDIARY_KEYSTORE_FILE` set to the
+`.jks` path. `app/build.gradle.kts` picks them up automatically.
+
+Pull requests from forks don't receive secrets, so they build with the debug key. That's expected.
 ---
 
 ## 12. Emulator (UI work only)
