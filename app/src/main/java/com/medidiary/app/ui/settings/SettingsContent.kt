@@ -1,6 +1,12 @@
 package com.medidiary.app.ui.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import com.medidiary.app.domain.ReminderTime
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,6 +64,8 @@ data class SettingsUi(
     val gemmaReady: Boolean,
     val exportRange: ExportRange,
     val exporting: Boolean,
+    /** False when the OS blocks MediDiary's notifications (Android 13+ permission, or switched off). */
+    val notificationsAllowed: Boolean = true,
 )
 
 interface SettingsActions {
@@ -67,6 +75,8 @@ interface SettingsActions {
     fun setExportRange(range: ExportRange)
     fun export(pdf: Boolean)
     fun deleteAllData()
+    /** Ask the OS to allow reminder notifications (Android 13+ permission prompt / app notification settings). */
+    fun requestNotificationPermission() {}
 }
 
 @Composable
@@ -76,6 +86,7 @@ fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, on
     val exporting = ui.exporting
     var name by remember { mutableStateOf(s.patientName) }
     var showCustom by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
 
@@ -117,6 +128,37 @@ fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, on
             Column {
                 ModelStatusLine("Whisper", ui.whisperReady)
                 ModelStatusLine("Gemma", ui.gemmaReady)
+            }
+        }
+
+        // ---- DAILY REMINDER -------------------------------------------------------------------
+        NeuCard(Modifier.fillMaxWidth()) {
+            SectionLabel("Daily reminder")
+            ToggleRow("Remind me to check in every day", s.reminderEnabled) { v -> actions.update { it.copy(reminderEnabled = v) } }
+            AnimatedVisibility(s.reminderEnabled) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Time", color = Mocha.Text, modifier = Modifier.weight(1f))
+                        NeuButton({ showTimePicker = true }, accent = Mocha.Blue, alwaysAccent = true) {
+                            Icon(Icons.Filled.Alarm, null)
+                            Text(ReminderTime.label(s.reminderHour, s.reminderMinute), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    ToggleRow("Skip if I already checked in today", s.reminderSkipIfLogged) { v ->
+                        actions.update { it.copy(reminderSkipIfLogged = v) }
+                    }
+                    if (!ui.notificationsAllowed) {
+                        MessageBanner("Notifications are blocked, so the reminder can't appear.", BannerKind.ERROR)
+                        NeuButton(actions::requestNotificationPermission, accent = Mocha.Yellow, alwaysAccent = true) {
+                            Text("Allow notifications")
+                        }
+                    }
+                    Text(
+                        "A notification asks “আজ কোন ওষুধ খেয়েছেন, কেমন লাগছে?” at this time each day. Tapping it opens " +
+                            "today's check-in. It never shows your health data.",
+                        color = Mocha.Overlay1, style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
 
@@ -209,6 +251,12 @@ fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, on
         Spacer(Modifier.height(24.dp))
     }
 
+    if (showTimePicker) {
+        ReminderTimeDialog(s.reminderHour, s.reminderMinute, onDismiss = { showTimePicker = false }) { h, m ->
+            actions.update { it.copy(reminderHour = h, reminderMinute = m, reminderEnabled = true) }
+            showTimePicker = false
+        }
+    }
     if (showCustom) CustomRetentionDialog(s.retentionDays, onDismiss = { showCustom = false }) { actions.setRetention(it); showCustom = false }
     if (confirmWipe) {
         AlertDialog(
@@ -268,3 +316,34 @@ private fun CustomRetentionDialog(current: Int, onDismiss: () -> Unit, onSet: (I
 
 /** Export ranges offered under "EXPORT TO". days = null means every saved entry. */
 enum class ExportRange(val label: String, val days: Int?) { WEEK("Last 7 days", 7), MONTH("Last 30 days", 30), ALL("All", null) }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onSet: (Int, Int) -> Unit) {
+    val state = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = false)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Mocha.Base,
+        title = { Text("Reminder time", color = Mocha.Text) },
+        text = {
+            TimePicker(
+                state = state,
+                colors = TimePickerDefaults.colors(
+                    clockDialColor = Mocha.Mantle,
+                    selectorColor = Mocha.Blue,
+                    timeSelectorSelectedContainerColor = Mocha.Surface0,
+                    timeSelectorUnselectedContainerColor = Mocha.Mantle,
+                    timeSelectorSelectedContentColor = Mocha.Blue,
+                    timeSelectorUnselectedContentColor = Mocha.Subtext0,
+                    periodSelectorSelectedContainerColor = Mocha.Surface0,
+                    periodSelectorSelectedContentColor = Mocha.Blue,
+                    periodSelectorUnselectedContentColor = Mocha.Subtext0,
+                    clockDialSelectedContentColor = Mocha.Crust,
+                    clockDialUnselectedContentColor = Mocha.Text,
+                ),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSet(state.hour, state.minute) }) { Text("Set", color = Mocha.Blue) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Mocha.Subtext0) } },
+    )
+}

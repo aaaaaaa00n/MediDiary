@@ -4,6 +4,9 @@
 
     <!-- Only permission the app needs. Recording starts only when the user taps the mic. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Daily check-in reminder: show the notification (Android 13+ asks the user) and re-arm it after a reboot. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- CORE RULE #1: zero cloud inference. Strip INTERNET/network permissions even if a library
          tries to merge them in. `./gradlew :app:processReleaseManifest` + grep to double-check. -->
@@ -33,6 +36,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Daily reminder alarm (only our own explicit intent reaches it). -->
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- Re-arm the reminder after reboot / app update / clock or timezone change.
+             These are protected system broadcasts, so other apps cannot send them. -->
+        <receiver
+            android:name=".reminder.ReminderRescheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Offline sharing of exported PDF/CSV (user-initiated only). -->
         <provider

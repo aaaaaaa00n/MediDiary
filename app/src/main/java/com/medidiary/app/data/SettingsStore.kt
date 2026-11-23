@@ -18,6 +18,10 @@ class SettingsStore(context: Context) {
         llmContextSize = prefs.getInt("llmContextSize", 1024),
         llmMaxTokens = prefs.getInt("llmMaxTokens", 384),
         allowMockEngines = prefs.getBoolean("allowMockEngines", true),
+        reminderEnabled = prefs.getBoolean("reminderEnabled", true),
+        reminderHour = prefs.getInt("reminderHour", 21),
+        reminderMinute = prefs.getInt("reminderMinute", 0),
+        reminderSkipIfLogged = prefs.getBoolean("reminderSkipIfLogged", true),
     )
 
     fun update(transform: (AppSettings) -> AppSettings) {
@@ -30,6 +34,10 @@ class SettingsStore(context: Context) {
             .putInt("llmContextSize", s.llmContextSize)
             .putInt("llmMaxTokens", s.llmMaxTokens)
             .putBoolean("allowMockEngines", s.allowMockEngines)
+            .putBoolean("reminderEnabled", s.reminderEnabled)
+            .putInt("reminderHour", s.reminderHour)
+            .putInt("reminderMinute", s.reminderMinute)
+            .putBoolean("reminderSkipIfLogged", s.reminderSkipIfLogged)
             .apply()
         _settings.value = s
     }
