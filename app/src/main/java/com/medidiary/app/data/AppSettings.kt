@@ -12,4 +12,11 @@ data class AppSettings(
     val llmMaxTokens: Int = 384,
     /** Allow the scripted mock engines when model files are missing (development only). */
     val allowMockEngines: Boolean = true,
+    /** Daily check-in reminder (proposal §3 step 1: "A reminder invites the user…"). */
+    val reminderEnabled: Boolean = true,
+    /** Local time of the reminder, 24 h clock. Default 9:00 PM, so the whole day can be reported. */
+    val reminderHour: Int = 21,
+    val reminderMinute: Int = 0,
+    /** Don't remind on days the user already saved at least one entry. */
+    val reminderSkipIfLogged: Boolean = true,
 )

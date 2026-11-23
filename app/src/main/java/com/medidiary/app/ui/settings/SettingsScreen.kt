@@ -1,5 +1,10 @@
 package com.medidiary.app.ui.settings
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.medidiary.app.reminder.ReminderScheduler
 import com.medidiary.app.ai.ModelKind
 import com.medidiary.app.data.AppSettings
 import com.medidiary.app.ui.components.NeuButton
@@ -51,9 +58,21 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     var showModels by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refreshModels() }
 
+    // Notification permission for the daily reminder: re-checked every time the screen resumes
+    // (the user may have changed it in system settings).
+    var notificationsAllowed by remember { mutableStateOf(ReminderScheduler.notificationsAllowed(context)) }
+    LifecycleResumeEffect(Unit) {
+        notificationsAllowed = ReminderScheduler.notificationsAllowed(context)
+        onPauseOrDispose { }
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationsAllowed = ReminderScheduler.notificationsAllowed(context)
+        if (!notificationsAllowed) context.startActivity(appNotificationSettings(context))
+    }
+
     SettingsContent(
         s = s,
-        ui = SettingsUi(message, models.whisper != null, models.gemma != null, exportRange, exporting),
+        ui = SettingsUi(message, models.whisper != null, models.gemma != null, exportRange, exporting, notificationsAllowed),
         actions = remember(vm) {
             object : SettingsActions {
                 override fun update(transform: (AppSettings) -> AppSettings) = vm.update(transform)
@@ -62,12 +81,22 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                 override fun setExportRange(range: ExportRange) { vm.exportRange.value = range }
                 override fun export(pdf: Boolean) { vm.export(pdf) { context.startActivity(it) } }
                 override fun deleteAllData() { vm.deleteAllData() }
+                override fun requestNotificationPermission() {
+                    if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else context.startActivity(appNotificationSettings(context))
+                }
             }
         },
         onBack = onBack,
     )
     if (showModels) ModelsDialog(vm, models.whisper, models.gemma) { showModels = false }
 }
+
+/** Opens MediDiary's page in the system notification settings (when the permission prompt can't be shown). */
+private fun appNotificationSettings(context: Context): Intent =
+    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 @Composable
 private fun ModelsDialog(vm: SettingsViewModel, whisper: File?, gemma: File?, onDismiss: () -> Unit) {

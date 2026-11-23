@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.medidiary.app.MediDiaryApp
 import com.medidiary.app.ai.ModelKind
 import com.medidiary.app.data.AppSettings
+import com.medidiary.app.domain.ReminderTime
+import com.medidiary.app.reminder.ReminderScheduler
 import com.medidiary.app.ui.diary.DateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +28,17 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val externalModelDir: String get() = c.modelManager.externalDirPath()
 
     fun update(transform: (AppSettings) -> AppSettings) {
+        val before = c.settings.settings.value
         c.settings.update(transform)
+        val after = c.settings.settings.value
+        if (before.reminderEnabled != after.reminderEnabled || before.reminderHour != after.reminderHour ||
+            before.reminderMinute != after.reminderMinute
+        ) {
+            ReminderScheduler.schedule(getApplication(), after)
+            if (after.reminderEnabled) {
+                message.value = "Daily reminder set for ${ReminderTime.label(after.reminderHour, after.reminderMinute)}."
+            }
+        }
     }
 
     /** 30, 60 or a custom number of days (1–365). */

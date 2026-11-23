@@ -9,6 +9,7 @@ import com.medidiary.app.data.db.AppDatabase
 import com.medidiary.app.data.dgda.DgdaLookupRepository
 import com.medidiary.app.data.dgda.DgdaSeeder
 import com.medidiary.app.export.ExportManager
+import com.medidiary.app.reminder.ReminderScheduler
 import com.medidiary.app.work.RetentionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,5 +45,7 @@ class MediDiaryApp : Application() {
             cacheDir.listFiles { f -> f.extension == "wav" }?.forEach { it.delete() }
         }
         RetentionWorker.schedule(this)
+        ReminderScheduler.ensureChannel(this)
+        ReminderScheduler.schedule(this, container.settings.settings.value)
     }
 }

@@ -33,7 +33,6 @@ The UI follows the team wireframe and uses the **Catppuccin Mocha** palette with
   Advanced · Privacy · About.
 - On tablets and in landscape (≥ 840 dp) the Calendar is a permanent left panel, as in the wireframe.
 
-How to change the theme and components: [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §6.
 
 | Home (review) | Recording | Calendar | Settings |
 |---|---|---|---|
@@ -71,7 +70,9 @@ whisper.cpp and llama.cpp never clash.
 [![Android APK](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml/badge.svg)](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml)
 
 **Ready-made APKs:** every push builds one in GitHub Actions (*Actions → Android APK → Artifacts*). Tagging `v1.0.0`
-publishes it as a GitHub Release. See [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §11.1.
+publishes it as a GitHub Release. The workflow fails if the APK ever gains a network permission. For a fixed signing key
+(so CI builds update each other on the demo phone), add the repository secrets `MEDIDIARY_KEYSTORE_BASE64`,
+`MEDIDIARY_KEYSTORE_PASSWORD`, `MEDIDIARY_KEY_ALIAS` and `MEDIDIARY_KEY_PASSWORD`.
 
 **Step-by-step setup for Windows and Fedora (Android Studio, emulator, device, troubleshooting): [`docs/DEVELOPING.md`](docs/DEVELOPING.md).**
 
@@ -87,21 +88,9 @@ git submodule update --init --recursive
 
 The first native build compiles whisper.cpp and llama.cpp and takes several minutes. Only `arm64-v8a` is built.
 
-Check that no network permission sneaks in:
 
-```bash
-./gradlew :app:processDebugMainManifest && grep -c INTERNET app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml
-```
+## Model files (custom fine-tuned Whisper + Gemma)
 
-The expected output is `0`.
-
-## Model files (your fine-tuned Whisper + Gemma)
-
-**Do not commit model weights to git.** GitHub rejects files over 100 MB, and `.gitignore` already excludes
-`*.gguf` and `*.bin`. Share them with the team through Google Drive or a GitHub Release asset, then put them on
-the phone.
-
-The app looks for exactly these two files:
 
 | File name on device | Format | How to produce it |
 |---|---|---|
@@ -121,50 +110,6 @@ You can install them in either of two ways. Neither uses the network.
 2. **In the app.** Copy the files to the phone (Downloads, USB, SD card), then use **Settings → Load model → Import…**. The
    app checks the file header (GGUF / ggml) before accepting it.
 
-(A third option is to bundle the models in `app/src/main/assets/models/` under the names above, which makes a ~1 GB APK.
-Avoid this unless judges must install a single file.)
-
-Until both files are present, the app runs in a clearly labelled **demo mode** with scripted output. You can turn
-this off in Settings → Advanced. The proposal requires live AI in the demo, so install the models before recording.
-
-### Matching your fine-tune's prompt format
-
-**Verified against the training notebook (`gemma3.ipynb`):** the model was trained with Unsloth's `gemma-3` chat
-template on `system` + `user` + `assistant` messages. That renders as
-`<bos><start_of_turn>user\n{SYSTEM_PROMPT}\n\n{transcript}<end_of_turn>\n<start_of_turn>model\n`, which is exactly
-what llama.cpp's built-in Gemma handler produces with the default setting (chat template **on**). The system prompt in
-`domain/Prompts.kt` is byte-identical to the notebook's `SYSTEM_PROMPT`, and `PromptsTest` keeps it that way.
-Training used `max_seq_length = 1024`, so the app's default context is also 1024.
-
-General notes for other fine-tunes:
-
-Extraction sends the exact system prompt from `claude.md` §3.2 (`domain/Prompts.kt`). By default the prompt is wrapped
-with the GGUF's embedded chat template (Gemma's `<start_of_turn>user … <start_of_turn>model`; Gemma has no system
-role, so the system prompt is merged into the user turn). If your fine-tuning data used a different layout, either:
-
-- turn off **Settings → Advanced → Use GGUF chat template**, which sends `system + "\n\n" + transcript` verbatim, or
-- edit `build_prompt()` in `llama/src/main/cpp/llama_jni.cpp` to reproduce your training format exactly.
-
-Decoding is greedy (temperature 0.0) and stops as soon as the top-level JSON object closes. The default context
-is 1024 tokens because Bangla transcripts tokenise long. Change it in Settings → Advanced.
-
-### Recommended Whisper model
-
-Use [SayedShaun/bengali-whisper-medium-ggml](https://huggingface.co/SayedShaun/bengali-whisper-medium-ggml). It is already in
-whisper.cpp format, so **no conversion is needed**: download one `.bin`, rename it to `medidiary-whisper.bin` and push it.
-
-| file | size | notes |
-|---|---|---|
-| `ggml-model-q6_k.bin` | 610 MB | best quality per byte; start here |
-| `ggml-model-q4_0.bin` | 424 MB | faster and smaller; use it if q6_k is too slow on the demo phone |
-| `ggml-model-q2_k.bin` | 254 MB | avoid: the author warns it can hallucinate or drop words |
-
-This is a *medium* model (~769M params), so speed on a phone CPU is the main risk. Time a 20–30 s clip on the demo
-phone (the transcript screen shows the on-device time) before choosing between q6_k and q4_0.
-
-### Whisper language
-
-Use the **SELECT LANGUAGE (EN | BN)** toggle on the main screen. `bn` is the default.
 
 ## Training notebooks (`training/`)
 
@@ -174,30 +119,6 @@ Both notebooks run in Google Colab.
 |---|---|
 | `gemma3_medidiary_v2.ipynb` | Re-trains the Gemma 3 1B extractor for better **symptom recall**. It adds about 1,000 synthetic multi-symptom check-ins (labelled so that `name` = the words as spoken), turns packing off, and adds negation and planned-medicine negatives. It reports strict and lenient P/R/F1, re-checks the **quantised GGUF with llama.cpp** using the app's exact prompt, and saves `medidiary-gemma.gguf` to Drive. |
 | `whisper_bengali_setup.ipynb` | Sets up the speech model [SayedShaun/bengali-whisper-medium-ggml](https://huggingface.co/SayedShaun/bengali-whisper-medium-ggml), which is already ggml so no conversion is needed. It downloads q6_k and q4_0, checks them with the **same whisper.cpp version as the app** (v1.9.5), compares CER and speed on your own Bangla clips, and saves the chosen file as `medidiary-whisper.bin`. |
-
-## DGDA reference data: please review
-
-`app/src/main/assets/dgda/dgda_medicines.csv` (brand → generic) and `dgda_aliases.csv` (Bangla spellings → brand)
-are a hand-made **seed of about 80 common Bangladeshi brands**. **Dev 2 must check every row against the DGDA
-registered-drug list before the demo, then extend it.** Edit the CSVs and bump `DgdaSeeder.SEED_VERSION`; no Room
-migration is needed. Matching order is: exact brand/alias/generic, then exact after stripping strength/form
-("Esonix 20 mg"), then prefix, then a small edit distance. Anything not exact is labelled as a *suggestion* in the UI
-and the PDF.
-
-## Tests
-
-```bash
-./gradlew :app:testDebugUnitTest
-```
-
-These cover the parser (fences, chatter, truncated JSON, out-of-schema items), the sanitizer, the DGDA matcher
-(against the shipped CSVs) and CSV escaping.
-
-## Demo checklist (airplane mode)
-
-Speak Bangla → edit transcript → **Confirmation** → verify cards → **Confirm & Save** → ☰ Calendar → Settings → Export PDF.
-The full checklist is in [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §9.
-The transcript and review screens show on-device timings for the evaluation write-up.
 
 ## References & acknowledgements
 
