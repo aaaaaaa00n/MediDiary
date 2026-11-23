@@ -19,3 +19,7 @@
 *.gguf
 *.bin
 models/
+
+# Signing keys never go into git (use GitHub Actions secrets)
+*.jks
+*.keystore

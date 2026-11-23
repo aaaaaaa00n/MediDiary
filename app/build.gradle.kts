@@ -19,8 +19,9 @@ android {
         applicationId = "com.medidiary.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI: every workflow run gets a higher versionCode, so a newer APK installs over an older one.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = System.getenv("MEDIDIARY_VERSION_NAME") ?: "1.0.0"
 
         ndk {
             // Only build for modern 64-bit ARM phones (fast builds)
@@ -46,12 +47,26 @@ android {
         }
     }
 
+    // Optional fixed release key (GitHub Actions secrets → env). Without it, release builds use the
+    // machine's debug key — fine locally, but CI would produce a different key on every run.
+    val keystorePath = System.getenv("MEDIDIARY_KEYSTORE_FILE")
+    if (keystorePath != null && file(keystorePath).exists()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("MEDIDIARY_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MEDIDIARY_KEY_ALIAS")
+                keyPassword = System.getenv("MEDIDIARY_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Demo builds: sign with the debug key so the APK can be side-loaded directly.
-            signingConfig = signingConfigs.getByName("debug")
+            // Side-loadable demo builds: the fixed release key if configured, else the debug key.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

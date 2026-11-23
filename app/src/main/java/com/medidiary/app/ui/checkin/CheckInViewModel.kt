@@ -10,27 +10,13 @@ import com.medidiary.app.domain.MatchStatus
 import com.medidiary.app.domain.ModelResponseParser
 import com.medidiary.app.domain.ProposedRecord
 import com.medidiary.app.domain.RecordType
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
-
-enum class Busy { NONE, RECORDING, TRANSCRIBING, EXTRACTING, SAVING }
-
-data class CheckInState(
-    val busy: Busy = Busy.NONE,
-    val transcript: String = "",
-    val proposals: List<ProposedRecord> = emptyList(),
-    val error: String? = null,
-    val info: String? = null,
-    val rawModelOutput: String? = null,
-    val asrMs: Long? = null,
-    val llmMs: Long? = null,
-    val mockMode: Boolean = false,
-)
 
 /**
  * Shared by CheckIn → Transcript → Review. Holds proposals in memory only; nothing is written

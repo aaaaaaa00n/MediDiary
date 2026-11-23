@@ -67,7 +67,12 @@ whisper.cpp and llama.cpp never clash.
 
 ## Build
 
-**Step-by-step setup for Windows and Fedora (Android Studio, emulator, device, troubleshooting): [`docs/DEVELOPING.md`](docs/DEVELOPING.md).**
+[![Android APK](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml/badge.svg)](https://github.com/aaaaaaa00n/MediDiary/actions/workflows/android-apk.yml)
+
+**Ready-made APKs:** every push builds one in GitHub Actions (*Actions → Android APK → Artifacts*). Tagging `v1.0.0`
+publishes it as a GitHub Release. The workflow fails if the APK ever gains a network permission. For a fixed signing key
+(so CI builds update each other on the demo phone), add the repository secrets `MEDIDIARY_KEYSTORE_BASE64`,
+`MEDIDIARY_KEYSTORE_PASSWORD`, `MEDIDIARY_KEY_ALIAS` and `MEDIDIARY_KEY_PASSWORD`.
 
 Requirements: Android Studio (Ladybug or newer), JDK 17, **NDK 27.2.12479018**, CMake 3.22.1 (install both from
 SDK Manager → SDK Tools).
