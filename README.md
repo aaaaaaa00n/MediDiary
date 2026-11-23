@@ -82,7 +82,7 @@ git submodule update --init --recursive
 The first native build compiles whisper.cpp and llama.cpp and takes several minutes. Only `arm64-v8a` is built.
 
 
-## Model files (your fine-tuned Whisper + Gemma)
+## Model files (custom fine-tuned Whisper + Gemma)
 
 
 | File name on device | Format | How to produce it |
