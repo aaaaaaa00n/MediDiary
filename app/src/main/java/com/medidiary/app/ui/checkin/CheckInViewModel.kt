@@ -46,6 +46,11 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
     private var recordJob: Job? = null
     private var wavFile: File? = null
 
+    /** App settings (the EN | BN toggle on the home screen reads/writes the speech language). */
+    val settings = c.settings.settings
+
+    fun setAsrLanguage(code: String) = c.settings.update { it.copy(asrLanguage = code) }
+
     fun refreshMode() = _state.update { it.copy(mockMode = c.pipeline.isMockMode()) }
 
     fun startRecording() {

@@ -21,6 +21,27 @@ The full engineering spec is in [`claude.md`](claude.md).
 | Raw audio deleted after transcription | `CheckInViewModel.stopAndTranscribe`, plus a startup sweep in `MediDiaryApp` |
 | No cloud backup of health data | `allowBackup=false` + `data_extraction_rules.xml` / `backup_rules.xml` |
 
+## Design
+
+The UI follows the team wireframe and uses the **Catppuccin Mocha** palette with **neumorphic** (soft-UI) controls:
+
+- **Main screen:** ☰ **Calendar** panel (month grid, dates, edit/delete saved entries), ⚙ **Settings**, **EN | BN** speech
+  language toggle, a **VOICE MODEL** card (mic, timer, level meter) and a **TRANSCRIPTION AND EDITS** card. Its
+  **Confirmation** button runs the on-device extraction. The proposed medicines and symptoms then appear as review cards,
+  and nothing is saved until **Confirm & Save**.
+- **Settings window:** User details · Load model · Data retention days (30 / 60 / Custom) · Export to CSV / PDF ·
+  Advanced · Privacy · About.
+- On tablets and in landscape (≥ 840 dp) the Calendar is a permanent left panel, as in the wireframe.
+
+How to change the theme and components: [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §6.
+
+| Home (review) | Recording | Calendar | Settings |
+|---|---|---|---|
+| <img src="docs/screenshots/home_phone_review.png" width="200"> | <img src="docs/screenshots/home_phone_recording.png" width="200"> | <img src="docs/screenshots/calendar_drawer.png" width="200"> | <img src="docs/screenshots/settings.png" width="200"> |
+
+Tablet / landscape: [`docs/screenshots/home_tablet.png`](docs/screenshots/home_tablet.png). These images are rendered
+from the Compose preview functions with fictional sample data.
+
 ## Project layout
 
 ```
@@ -31,7 +52,10 @@ app/                      Kotlin + Jetpack Compose app (com.medidiary.app)
   data/dgda/              DGDA seeder + deterministic brand→generic matcher
   domain/                 ModelResponseParser, ExtractionSanitizer, system prompt
   export/                 PdfReportGenerator (android.graphics.pdf), CsvExporter, FileProvider sharing
-  ui/                     CheckIn → Transcript → Review screens, Timeline, Settings
+  ui/home/                Main screen: Voice model, Transcription and edits, review cards
+  ui/diary/               Calendar side panel (month grid + dates + edit/delete)
+  ui/settings/            Settings window: user details, load model, retention, export
+  ui/theme/, components/  Catppuccin Mocha palette + neumorphism kit
   work/                   30/60-day retention worker
   src/main/assets/dgda/   DGDA reference CSVs (review before release, see below)
 whisper/                  JNI module: whisper.cpp → libmedidiary_whisper.so
@@ -88,8 +112,8 @@ You can install them in either of two ways. Neither uses the network.
    ```bash
    adb push gemma-3-1b-it.Q4_K_M.gguf /sdcard/Android/data/com.medidiary.app/files/models/medidiary-gemma.gguf
    ```
-   Then go to **Settings → On-device AI models → Re-scan**.
-2. **In the app.** Copy the files to the phone (Downloads, USB, SD card), then use **Settings → Import file…**. The
+   Then go to **Settings → Load model → Re-scan**.
+2. **In the app.** Copy the files to the phone (Downloads, USB, SD card), then use **Settings → Load model → Import…**. The
    app checks the file header (GGUF / ggml) before accepting it.
 
 (A third option is to bundle the models in `app/src/main/assets/models/` under the names above, which makes a ~1 GB APK.
@@ -135,7 +159,7 @@ phone (the transcript screen shows the on-device time) before choosing between q
 
 ### Whisper language
 
-Settings → Speech language: `bn` (default), `en`, or auto-detect for code-switched speech.
+Use the **SELECT LANGUAGE (EN | BN)** toggle on the main screen. `bn` is the default.
 
 ## Training notebooks (`training/`)
 
@@ -166,7 +190,8 @@ These cover the parser (fences, chatter, truncated JSON, out-of-schema items), t
 
 ## Demo checklist (airplane mode)
 
-Speak Bangla → edit transcript → **Process & Extract** → verify cards → **Confirm & Save** → Timeline → Export PDF.
+Speak Bangla → edit transcript → **Confirmation** → verify cards → **Confirm & Save** → ☰ Calendar → Settings → Export PDF.
+The full checklist is in [`docs/DEVELOPING.md`](docs/DEVELOPING.md) §9.
 The transcript and review screens show on-device timings for the evaluation write-up.
 
 ## References & acknowledgements
@@ -179,3 +204,4 @@ The transcript and review screens show on-device timings for the evaluation writ
 6. Bangladesh DGHS, Bangladesh Core FHIR Implementation Guide: DGDA Registered Drugs value set. The brand/generic
    subset is used as a reference for suggestions only.
 7. Android Developers: Auto Backup and sensitive data controls.
+8. Catppuccin colour palette (MIT), https://github.com/catppuccin/catppuccin.
