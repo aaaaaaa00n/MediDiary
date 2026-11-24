@@ -7,6 +7,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -72,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.medidiary.app.audio.AudioRecorder
 import com.medidiary.app.domain.MatchStatus
 import com.medidiary.app.domain.ProposedRecord
 import com.medidiary.app.domain.RecordType
@@ -101,6 +103,8 @@ data class HomeUi(
     val language: String,
     val amplitude: Float = 0f,
     val elapsedMs: Long = 0L,
+    /** Mic is open but no speech yet (first 10 s silence gate). */
+    val listening: Boolean = false,
 )
 
 /** Everything the home screen can ask for. Implemented by [rememberHomeActions] over the ViewModel. */
@@ -117,6 +121,11 @@ interface HomeActions {
     fun addManual(type: String)
     fun save()
     fun discard()
+    // Task 2: unrecognised medicine name → check-in stopped.
+    fun keepAsTyped() {}
+    fun editTranscript() {}
+    fun reRecord() {}
+    fun applySuggestion(record: ProposedRecord) {}
 }
 
 /** Stateless layout: phone drawer vs. permanent side panel. [calendar] renders the CALENDAR panel. */
@@ -196,6 +205,7 @@ fun HomeContent(ui: HomeUi, actions: HomeActions, onOpenSettings: () -> Unit, on
         state.info?.let { MessageBanner(it, if (it.startsWith("Saved")) BannerKind.SUCCESS else BannerKind.INFO) }
         state.error?.let { MessageBanner(it, BannerKind.ERROR) }
 
+        if (state.rejected.isNotEmpty()) RejectedNamesCard(state, actions)
         VoiceModelCard(ui, actions)
         TranscriptionCard(state, actions)
         if (state.proposals.isNotEmpty() || state.rawModelOutput != null) ReviewCard(state, actions, onEdit = { editing = it })
@@ -250,16 +260,31 @@ private fun VoiceModelCard(ui: HomeUi, actions: HomeActions) {
             MicButton(recording, transcribing, amplitude, onClick = actions::onMicTapped)
         }
         val secs = elapsed / 1000
+        val listening = recording && ui.listening
         Text(
             when {
+                listening -> "Listening… start speaking (%d s)".format(
+                    ((AudioRecorder.SILENCE_TIMEOUT_MS - elapsed + 999) / 1000).coerceAtLeast(0),
+                )
                 recording -> "%d:%02d / 1:00 · tap to stop".format(secs / 60, secs % 60)
                 transcribing -> "Transcribing on this phone…"
                 else -> "Tap the microphone to speak"
             },
-            color = if (recording) Mocha.Red else Mocha.Text,
+            color = when {
+                listening -> Mocha.Yellow
+                recording -> Mocha.Red
+                else -> Mocha.Text
+            },
             style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
         AmplitudeBars(amplitude, recording)
+        if (listening) {
+            Text(
+                "Stops by itself if nothing is heard in 10 seconds. Silence before you speak is not recorded.",
+                color = Mocha.Overlay1, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         if (transcribing) {
             TextButton(onClick = actions::cancel, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Cancel", color = Mocha.Subtext0) }
         }
@@ -394,7 +419,10 @@ private fun ReviewCard(state: CheckInState, actions: HomeActions, onEdit: (Propo
 
         GroupHeader("Medicines", MedicineAccent) { actions.addManual(RecordType.MEDICINE) }
         if (medicines.isEmpty()) EmptyHint("No medicines found.")
-        medicines.forEach { ProposalRow(it, MedicineAccent, actions::updateProposal, { onEdit(it) }, { actions.removeProposal(it.localId) }) }
+        medicines.forEach {
+            ProposalRow(it, MedicineAccent, actions::updateProposal, { onEdit(it) }, { actions.removeProposal(it.localId) },
+                onAcceptSuggestion = { actions.applySuggestion(it) })
+        }
 
         GroupHeader("Symptoms", SymptomAccent) { actions.addManual(RecordType.SYMPTOM) }
         if (symptoms.isEmpty()) EmptyHint("No symptoms found.")
@@ -424,6 +452,35 @@ private fun ReviewCard(state: CheckInState, actions: HomeActions, onEdit: (Propo
     }
 }
 
+/** Task 2: the check-in stopped because a medicine name matched nothing we know. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RejectedNamesCard(state: CheckInState, actions: HomeActions) {
+    NeuCard(Modifier.fillMaxWidth()) {
+        SectionLabel("Check-in stopped", color = Mocha.Red)
+        val names = state.rejected.joinToString(", ") { "“${it.name}”" }
+        Text(
+            "We couldn't recognise $names as a medicine, so nothing was sent to review. " +
+                "Say it again, fix the text, or keep it exactly as typed.",
+            color = Mocha.Text, style = MaterialTheme.typography.bodyMedium,
+        )
+        state.rejected.mapNotNull { it.closest }.distinct().takeIf { it.isNotEmpty() }?.let {
+            Text("Closest known: ${it.joinToString(", ")}", color = Mocha.Subtext0, style = MaterialTheme.typography.bodySmall)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            NeuButton(onClick = actions::reRecord, accent = Mocha.Blue, alwaysAccent = true) {
+                Icon(Icons.Filled.Mic, null); Text("Say it again")
+            }
+            NeuButton(onClick = actions::editTranscript, accent = Mocha.Mauve, alwaysAccent = true) {
+                Icon(Icons.Filled.Edit, null); Text("Edit transcript")
+            }
+            NeuButton(onClick = actions::keepAsTyped, accent = Mocha.Peach, alwaysAccent = true) {
+                Text("Keep as typed")
+            }
+        }
+    }
+}
+
 @Composable
 private fun GroupHeader(title: String, accent: Color, onAdd: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -445,6 +502,7 @@ private fun ProposalRow(
     onChange: (ProposedRecord) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onAcceptSuggestion: () -> Unit = {},
 ) {
     Row(
         Modifier.fillMaxWidth().neumorphic(18.dp, if (rec.checked) 5.dp else 3.dp, inset = !rec.checked).padding(vertical = 6.dp),
@@ -462,6 +520,16 @@ private fun ProposalRow(
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                rec.didYouMean?.let {
+                    Text(
+                        "Did you mean $it?",
+                        color = Mocha.Crust,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.background(Mocha.Peach, CircleShape).clickable(onClick = onAcceptSuggestion)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
                 rec.timePhrase?.let { Pill("🕒 $it", Mocha.Subtext1) }
                 rec.note?.let { Pill("📝 $it", Mocha.Subtext1) }
                 if (rec.type == RecordType.MEDICINE) {

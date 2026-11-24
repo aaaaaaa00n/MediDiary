@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.medidiary.app.MediDiaryApp
 import com.medidiary.app.audio.AudioRecorder
+import com.medidiary.app.audio.StopReason
+import com.medidiary.app.data.dgda.NameVerdict
 import com.medidiary.app.domain.ExtractionSanitizer
 import com.medidiary.app.domain.MatchStatus
 import com.medidiary.app.domain.ModelResponseParser
@@ -39,48 +41,64 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshMode() = _state.update { it.copy(mockMode = c.pipeline.isMockMode()) }
 
+    /**
+     * Opens the mic. The recorder ends by itself when nobody speaks in the first 10 s (no audio is
+     * kept, Whisper never runs) or 60 s after the tap; the user can also tap stop any time.
+     * Either way, if speech was captured it is transcribed straight away.
+     */
     fun startRecording() {
         if (_state.value.busy != Busy.NONE) return
         val wav = File(getApplication<Application>().cacheDir, "checkin_${System.currentTimeMillis()}.wav")
         wavFile = wav
         _state.update { it.copy(busy = Busy.RECORDING, error = null, info = null) }
         recordJob = viewModelScope.launch {
-            runCatching { recorder.record(wav) }
-                .onFailure { e -> _state.update { it.copy(busy = Busy.NONE, error = e.message ?: "Recording failed") } }
+            val result = runCatching { recorder.record(wav) }.getOrElse { e ->
+                wav.delete()
+                wavFile = null
+                _state.update { it.copy(busy = Busy.NONE, error = e.message ?: "Recording failed") }
+                return@launch
+            }
+            when {
+                !result.speechDetected -> {
+                    wav.delete()
+                    wavFile = null
+                    val msg = if (result.stopReason == StopReason.NO_SPEECH)
+                        "Didn't hear anything in 10 seconds, so recording stopped. Tap the mic to try again."
+                    else "No speech was recorded. Tap the mic and start speaking."
+                    _state.update { it.copy(busy = Busy.NONE, info = msg) }
+                }
+                result.audioMs < 700 -> {
+                    wav.delete()
+                    wavFile = null
+                    _state.update { it.copy(busy = Busy.NONE, error = "Recording too short. Hold on a little longer.") }
+                }
+                else -> transcribe(wav)
+            }
         }
     }
 
-    /** Stops recording, transcribes, deletes the audio, then calls [onTranscript]. */
-    fun stopAndTranscribe(onTranscript: () -> Unit) {
-        val job = recordJob ?: return
+    /** User tapped stop: the running recording job finishes and transcribes what it captured. */
+    fun stopRecording() {
         recorder.requestStop()
-        viewModelScope.launch {
-            job.join()
-            val wav = wavFile ?: return@launch
-            if (_state.value.error != null) return@launch
-            if (recorder.elapsedMs.value < 700) {
-                wav.delete()
-                _state.update { it.copy(busy = Busy.NONE, error = "Recording too short — hold on a little longer.") }
-                return@launch
+    }
+
+    private suspend fun transcribe(wav: File) {
+        _state.update { it.copy(busy = Busy.TRANSCRIBING) }
+        val t0 = System.currentTimeMillis()
+        val result = runCatching { c.pipeline.transcribe(wav) }
+        wav.delete() // privacy: raw audio never outlives transcription
+        wavFile = null
+        result.onSuccess { text ->
+            _state.update {
+                it.copy(
+                    busy = Busy.NONE,
+                    transcript = listOf(it.transcript.trim(), text.trim()).filter { s -> s.isNotEmpty() }.joinToString(" "),
+                    asrMs = System.currentTimeMillis() - t0,
+                    mockMode = c.pipeline.isMockMode(),
+                )
             }
-            _state.update { it.copy(busy = Busy.TRANSCRIBING) }
-            val t0 = System.currentTimeMillis()
-            val result = runCatching { c.pipeline.transcribe(wav) }
-            wav.delete() // privacy: raw audio never outlives transcription
-            wavFile = null
-            result.onSuccess { text ->
-                _state.update {
-                    it.copy(
-                        busy = Busy.NONE,
-                        transcript = listOf(it.transcript.trim(), text.trim()).filter { s -> s.isNotEmpty() }.joinToString(" "),
-                        asrMs = System.currentTimeMillis() - t0,
-                        mockMode = c.pipeline.isMockMode(),
-                    )
-                }
-                onTranscript()
-            }.onFailure { e ->
-                _state.update { it.copy(busy = Busy.NONE, error = "Transcription failed: ${e.message}") }
-            }
+        }.onFailure { e ->
+            _state.update { it.copy(busy = Busy.NONE, error = "Transcription failed: ${e.message}") }
         }
     }
 
@@ -99,7 +117,7 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
     fun extract(onDone: () -> Unit) {
         val transcript = _state.value.transcript.trim()
         if (transcript.isEmpty() || _state.value.busy != Busy.NONE) return
-        _state.update { it.copy(busy = Busy.EXTRACTING, error = null, info = null) }
+        _state.update { it.copy(busy = Busy.EXTRACTING, error = null, info = null, rejected = emptyList(), held = emptyList()) }
         viewModelScope.launch {
             val t0 = System.currentTimeMillis()
             val raw = runCatching { c.pipeline.extract(transcript) }.getOrElse { e ->
@@ -116,6 +134,26 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
                     rec.copy(genericSuggestion = m.genericName, genericMatchStatus = m.status)
                 }
             }
+            // Task 2: stop before Review when a medicine name is nowhere near anything we know.
+            val gate = c.dgdaLookup.nameGate(c.diaryRepository.medicineNames())
+            val rejected = mutableListOf<RejectedName>()
+            val gated = matched.map { rec ->
+                if (rec.type != RecordType.MEDICINE) return@map rec
+                when (val v = gate.check(rec.name, rec.genericMatchStatus)) {
+                    is NameVerdict.Known -> rec
+                    is NameVerdict.Close -> rec.copy(didYouMean = v.suggestion.takeUnless { it.equals(rec.name.trim(), ignoreCase = true) })
+                    is NameVerdict.Reject -> { rejected += RejectedName(rec.name, v.closest); rec }
+                }
+            }
+            if (rejected.isNotEmpty()) {
+                _state.update {
+                    it.copy(
+                        busy = Busy.NONE, proposals = emptyList(), held = gated, rejected = rejected,
+                        rawModelOutput = raw, llmMs = System.currentTimeMillis() - t0, mockMode = c.pipeline.isMockMode(),
+                    )
+                }
+                return@launch
+            }
             val dropped = parsed.records.size - clean.size + parsed.rejectedCount
             val info = buildList {
                 parsed.error?.let { add("The AI output could not be read ($it). Add items manually below.") }
@@ -124,12 +162,28 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
             }.joinToString(" ").ifEmpty { null }
             _state.update {
                 it.copy(
-                    busy = Busy.NONE, proposals = matched, rawModelOutput = raw, llmMs = llmMs,
+                    busy = Busy.NONE, proposals = gated, rawModelOutput = raw, llmMs = llmMs,
                     info = info, mockMode = c.pipeline.isMockMode(),
                 )
             }
             onDone()
         }
+    }
+
+    /** "Keep as typed": the user vouches for the unrecognised name(s); they go to Review unmatched. */
+    fun keepAsTyped() = _state.update { s ->
+        s.copy(proposals = s.held, held = emptyList(), rejected = emptyList(), info = "Kept as typed. Check the names before saving.")
+    }
+
+    /** "Edit transcript": drop the held proposals so the user can fix the text and run Confirmation again. */
+    fun dismissRejection() = _state.update { it.copy(held = emptyList(), rejected = emptyList(), rawModelOutput = null) }
+
+    /** Accept a "Did you mean …?" suggestion. */
+    fun applySuggestion(record: ProposedRecord) {
+        val name = record.didYouMean ?: return
+        val renamed = record.copy(name = name, didYouMean = null)
+        updateProposal(renamed)
+        rematch(renamed)
     }
 
     fun updateProposal(updated: ProposedRecord) = _state.update { s ->

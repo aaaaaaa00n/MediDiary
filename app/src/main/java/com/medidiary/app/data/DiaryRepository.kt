@@ -33,6 +33,8 @@ class DiaryRepository(private val db: AppDatabase) {
         return dao.insertVerifiedSession(session, rows)
     }
 
+    suspend fun medicineNames(): List<String> = dao.medicineNames()
+
     fun observe(from: Long, to: Long): Flow<List<DiaryRecord>> = dao.observeRecords(from, to)
 
     suspend fun between(from: Long, to: Long): List<DiaryRecord> = dao.recordsBetween(from, to)

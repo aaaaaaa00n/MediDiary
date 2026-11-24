@@ -27,4 +27,6 @@ data class ProposedRecord(
     val timePhrase: String? = null,
     val note: String? = null,
     val checked: Boolean = true,
+    /** Set when the spoken name sounds like a known one ("Did you mean Seclo?"). Never applied silently. */
+    val didYouMean: String? = null,
 )

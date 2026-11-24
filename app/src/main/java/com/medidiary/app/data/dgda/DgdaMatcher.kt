@@ -44,6 +44,9 @@ class DgdaMatcher(entries: List<DgdaEntry>, aliases: Map<String, Int> = emptyMap
         keys = idx.entries.map { it.key to it.value }
     }
 
+    /** Every matchable key (normalized brand, alias or generic) → the name to show for it. */
+    fun vocabulary(): List<Pair<String, String>> = keys.map { (k, e) -> k to e.brandName }
+
     fun match(spoken: String): GenericMatch {
         val q = normalize(spoken)
         if (q.isEmpty()) return GenericMatch(null, MatchStatus.UNMATCHED)

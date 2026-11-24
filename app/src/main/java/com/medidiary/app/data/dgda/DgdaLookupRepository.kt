@@ -30,6 +30,10 @@ class DgdaLookupRepository(private val db: AppDatabase) {
         }
     }
 
+    /** Task 2: checks spoken names against DGDA + the names already saved in this diary. */
+    suspend fun nameGate(history: Collection<String>): MedicineNameGate =
+        MedicineNameGate(loadMatcher().vocabulary(), history)
+
     /** Call after re-seeding. */
     fun invalidate() {
         matcher = null

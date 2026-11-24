@@ -36,6 +36,10 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_records WHERE loggedDate BETWEEN :from AND :to ORDER BY loggedDate ASC")
     suspend fun recordsBetween(from: Long, to: Long): List<DiaryRecord>
 
+    /** The user's own medicine vocabulary (Task 2: a name saved before is never rejected). */
+    @Query("SELECT DISTINCT originalName FROM diary_records WHERE type = 'medicine'")
+    suspend fun medicineNames(): List<String>
+
     @Query("DELETE FROM diary_records WHERE loggedDate < :cutoff")
     suspend fun deleteRecordsOlderThan(cutoff: Long): Int
 

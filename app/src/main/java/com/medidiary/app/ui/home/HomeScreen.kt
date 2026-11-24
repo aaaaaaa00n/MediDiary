@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.medidiary.app.audio.AudioRecorder
+import com.medidiary.app.audio.RecPhase
 import com.medidiary.app.domain.ProposedRecord
 import com.medidiary.app.ui.checkin.Busy
 import com.medidiary.app.ui.checkin.CheckInViewModel
@@ -34,13 +34,12 @@ fun HomeScreen(flowVm: CheckInViewModel, diaryVm: DiaryViewModel, onOpenSettings
     val settings by flowVm.settings.collectAsStateWithLifecycle()
     val amplitude by flowVm.recorder.amplitude.collectAsStateWithLifecycle()
     val elapsed by flowVm.recorder.elapsedMs.collectAsStateWithLifecycle()
+    val phase by flowVm.recorder.phase.collectAsStateWithLifecycle()
     val actions = rememberHomeActions(flowVm)
     LaunchedEffect(Unit) { flowVm.refreshMode() }
-    LaunchedEffect(elapsed, state.busy) {
-        if (state.busy == Busy.RECORDING && elapsed >= AudioRecorder.MAX_SECONDS * 1000L) flowVm.stopAndTranscribe {}
-    }
+    // The recorder stops itself (10 s of silence / 60 s cap), so no timer-driven stop is needed here.
     HomeLayout(
-        ui = HomeUi(state, settings.asrLanguage, amplitude, elapsed),
+        ui = HomeUi(state, settings.asrLanguage, amplitude, elapsed, listening = phase == RecPhase.LISTENING),
         actions = actions,
         onOpenSettings = onOpenSettings,
         calendar = { onClose -> CalendarPanel(diaryVm, onClose) },
@@ -60,7 +59,7 @@ private fun rememberHomeActions(vm: CheckInViewModel): HomeActions {
             override fun onMicTapped() {
                 val busy = vm.state.value.busy
                 when {
-                    busy == Busy.RECORDING -> vm.stopAndTranscribe {}
+                    busy == Busy.RECORDING -> vm.stopRecording()
                     busy != Busy.NONE -> Unit
                     ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                         PackageManager.PERMISSION_GRANTED -> vm.startRecording()
@@ -77,6 +76,14 @@ private fun rememberHomeActions(vm: CheckInViewModel): HomeActions {
             override fun addManual(type: String) = vm.addManual(type)
             override fun save() = vm.save {}
             override fun discard() = vm.discard()
+            override fun keepAsTyped() = vm.keepAsTyped()
+            override fun editTranscript() = vm.dismissRejection()
+            override fun reRecord() {
+                vm.dismissRejection()
+                vm.setTranscript("")
+                onMicTapped()
+            }
+            override fun applySuggestion(record: ProposedRecord) = vm.applySuggestion(record)
         }
     }
 }
