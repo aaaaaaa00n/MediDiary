@@ -150,6 +150,16 @@ class FirestoreFamilySync(
         FamilySyncWorker.pushSoon(app) // finishes the upload even if the app is closed / offline now
     }
 
+    override fun syncNow() {
+        if (active() == null) return
+        scope.launch {
+            refresh(syncing = true)
+            push()
+            pullOnce()
+            listen() // re-attach the live listener in case it stopped
+        }
+    }
+
     private suspend fun ensureSignedIn() {
         if (auth.currentUser != null) return
         val result = withTimeoutOrNull(20_000) { runCatching { auth.signInAnonymously().await() } }

@@ -142,7 +142,7 @@ fun FamilySharingCard(sync: FamilySync) {
             st.error?.let { Text(it, color = Mocha.Yellow, style = MaterialTheme.typography.bodySmall) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 NeuButton({ showQr = true }, accent = Mocha.Teal, alwaysAccent = true) { Icon(Icons.Filled.QrCode, null); Text("Invite family") }
-                NeuButton({ sync.requestSync() }) { Icon(Icons.Filled.Sync, null); Text("Sync now") }
+                NeuButton({ sync.syncNow() }) { Icon(Icons.Filled.Sync, null); Text("Sync now") }
                 TextButton(onClick = { confirmLeave = true }) { Text("Leave", color = Mocha.Red) }
             }
         }

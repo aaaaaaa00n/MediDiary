@@ -38,8 +38,11 @@ interface FamilySync {
     /** Called once at app start. */
     fun start()
 
-    /** Upload local changes (and pull) soon. Cheap; safe to call often. */
+    /** Upload local changes soon. Cheap; safe to call often. */
     fun requestSync()
+
+    /** "Sync now" button: upload AND download everything right away. */
+    fun syncNow() = requestSync()
 
     /** Creates a new shared diary from this phone and returns its invite link. */
     suspend fun create(myName: String, diaryLabel: String): String
