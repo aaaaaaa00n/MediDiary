@@ -43,6 +43,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,7 +84,13 @@ class FirestoreFamilySync(
     private val prefs: FamilyPrefs,
     private val settings: SettingsStore,
 ) : FamilySync {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Sync runs in the background: any failure is shown on the Settings card, never crashes the app.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e ->
+            Log.w(TAG, "sync", e)
+            refresh("Sync error: ${explain(e)}")
+        },
+    )
     private val secrets = SecretStore(app)
     private val pushLock = Mutex()
     private val firebase: FirebaseApp? = FirebaseBootstrap.init(app)
@@ -168,10 +175,18 @@ class FirestoreFamilySync(
             Log.w(TAG, "firestore probe", e)
             error(explain(e))
         }
-        // Membership must exist before rules let us read the records; wait for the server briefly.
-        withTimeoutOrNull(20_000) {
-            member.set(mapOf("j" to System.currentTimeMillis())).await()
-        } ?: error("Firestore didn't confirm the write in 20 s (project '${BuildConfig.FIREBASE_PROJECT_ID}'). Check the internet connection.")
+        // Membership must exist before rules let us read the records. Firestore keeps unconfirmed
+        // writes in its local queue and delivers them later, so a slow confirmation is NOT fatal:
+        // wait briefly, then carry on (the records listener retries until membership lands).
+        // A real rejection (rules, project) still fails here, or later shows on the card.
+        val write = member.set(mapOf("j" to System.currentTimeMillis()))
+        write.addOnFailureListener { e ->
+            Log.w(TAG, "membership write", e)
+            refresh("The sync server rejected joining: ${explain(e)}")
+        }
+        val outcome = withTimeoutOrNull(10_000) { runCatching { write.await() } }
+        outcome?.exceptionOrNull()?.let { error(explain(it)) }
+        if (outcome == null) Log.i(TAG, "membership write not confirmed yet; continuing (queued by Firestore)")
     }
 
     /** Turns a Firestore failure into something the team can act on in the Firebase console. */
@@ -272,25 +287,39 @@ class FirestoreFamilySync(
         val pending = repo.pendingShared()
         if (pending.isEmpty()) return@withLock
         refresh(syncing = true)
-        var failed = 0
+        var waiting = 0
+        var rejected: Throwable? = null
         for (r in pending) {
             val e = Envelope.seal(key, diaryId, r)
-            val ok = withTimeoutOrNull(15_000) {
-                diaryRef(diaryId).collection("records").document(r.uuid)
-                    .set(mapOf("v" to 1L, "u" to e.updatedAt, "dev" to e.updatedBy, "c" to e.cipher)).await()
-                true
-            } == true
-            if (ok) repo.markSynced(r.uuid, r.updatedAt) else failed++
+            // Never let a server rejection escape this coroutine (it would crash the app).
+            val outcome = withTimeoutOrNull(15_000) {
+                runCatching {
+                    diaryRef(diaryId).collection("records").document(r.uuid)
+                        .set(mapOf("v" to 1L, "u" to e.updatedAt, "dev" to e.updatedBy, "c" to e.cipher)).await()
+                }
+            }
+            when {
+                outcome == null -> waiting++ // still in Firestore's queue; retried by the worker
+                outcome.isSuccess -> repo.markSynced(r.uuid, r.updatedAt)
+                else -> { rejected = outcome.exceptionOrNull(); Log.w(TAG, "record write", rejected) }
+            }
         }
-        if (failed == 0) prefs.lastSyncAt = System.currentTimeMillis()
-        refresh(if (failed > 0) "$failed change(s) waiting for internet. They'll upload automatically." else null)
+        if (waiting == 0 && rejected == null) prefs.lastSyncAt = System.currentTimeMillis()
+        refresh(
+            when {
+                rejected != null -> "Upload rejected: ${explain(rejected!!)}"
+                waiting > 0 -> "$waiting change(s) not confirmed by the server yet. They'll keep retrying automatically."
+                else -> null
+            },
+        )
     }
 
     /** One-off full pull (background worker). */
     suspend fun pullOnce() {
         val (diaryId, key) = active() ?: return
         ensureSignedIn()
-        val snap = diaryRef(diaryId).collection("records").get().await()
+        val snap = runCatching { diaryRef(diaryId).collection("records").get().await() }
+            .getOrElse { refresh("Download failed: ${explain(it)}"); throw it }
         merge(diaryId, key, snap.documents)
     }
 
