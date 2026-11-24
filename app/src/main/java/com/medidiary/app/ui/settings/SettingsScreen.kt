@@ -91,7 +91,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             }
         },
         onBack = onBack,
-        familySharing = { if (vm.familySync.supported) FamilySharingCard(vm.familySync) },
+        familySharing = { if (vm.familySync.supported) FamilySharingCard(vm.familySync, defaultName = s.patientName) },
     )
     if (showModels) ModelsDialog(vm, models.whisper, models.gemma) { showModels = false }
 }

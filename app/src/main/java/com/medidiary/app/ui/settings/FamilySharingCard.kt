@@ -54,12 +54,14 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun FamilySharingCard(sync: FamilySync) {
+fun FamilySharingCard(sync: FamilySync, defaultName: String = "") {
     val st by sync.state.collectAsStateWithLifecycle()
     val pendingInvite by sync.pendingInvite.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var name by remember { mutableStateOf(st.myName) }
+    // Pre-filled from User details, so there is one name to type, not two.
+    var name by remember { mutableStateOf(st.myName.ifBlank { defaultName }) }
+    val nameToUse = name.trim().ifBlank { defaultName.trim() }.ifBlank { "Family member" }
     var label by remember { mutableStateOf("") }
     var inviteText by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
@@ -99,20 +101,20 @@ fun FamilySharingCard(sync: FamilySync) {
                     "end-to-end encrypted. Recordings and transcripts never leave the phone.",
                 color = Mocha.Subtext0, style = MaterialTheme.typography.bodySmall,
             )
-            Text("Your name (shown to the family on your entries)", color = Mocha.Subtext1, style = MaterialTheme.typography.labelMedium)
+            Text("Your name (shown to the family on your entries; optional)", color = Mocha.Subtext1, style = MaterialTheme.typography.labelMedium)
             NeuTextField(name, { name = it }, singleLine = true, placeholder = "e.g. Ammu or Rafi")
 
             if (pendingInvite != null) {
                 MessageBanner("You opened a family diary invite. Enter your name and tap Join.", BannerKind.INFO)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NeuButton({ run { sync.join(pendingInvite.orEmpty(), name) } }, enabled = !working && name.isNotBlank() && st.configured,
+                    NeuButton({ run { sync.join(pendingInvite.orEmpty(), nameToUse) } }, enabled = !working && st.configured,
                         accent = Mocha.Green, alwaysAccent = true) { Icon(Icons.Filled.Group, null); Text("Join") }
                     TextButton(onClick = { sync.pendingInvite.value = null }) { Text("Ignore", color = Mocha.Subtext0) }
                 }
             } else {
                 Text("Start a new shared diary (on the parent's phone, or yours)", color = Mocha.Subtext1, style = MaterialTheme.typography.labelMedium)
                 NeuTextField(label, { label = it }, singleLine = true, placeholder = "Diary name, e.g. Ammu's diary")
-                NeuButton({ run { sync.create(name, label) } }, enabled = !working && name.isNotBlank() && st.configured,
+                NeuButton({ run { sync.create(nameToUse, label) } }, enabled = !working && st.configured,
                     accent = Mocha.Teal, alwaysAccent = true) { Icon(Icons.Filled.Group, null); Text("Create shared diary") }
 
                 Text("…or join one", color = Mocha.Subtext1, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp))
@@ -123,7 +125,7 @@ fun FamilySharingCard(sync: FamilySync) {
                             Icon(Icons.Filled.QrCodeScanner, null); Text("Scan QR")
                         }
                     }
-                    NeuButton({ run { sync.join(inviteText, name) } }, enabled = !working && name.isNotBlank() && inviteText.isNotBlank() && st.configured,
+                    NeuButton({ run { sync.join(inviteText, nameToUse) } }, enabled = !working && inviteText.isNotBlank() && st.configured,
                         accent = Mocha.Green, alwaysAccent = true) { Text("Join") }
                 }
             }
