@@ -1,6 +1,30 @@
 # Hackathon Workflow: Caregiver Sync · Bad-Name Stop · 10 s Silence Gate
 
-Status: **DRAFT for team review. No code changed yet.**
+Status: **Decisions agreed (see below). All three tasks implemented on branch `claude/peaceful-fermat-d9syz2`.**
+
+## Team decisions (2026-11-24)
+
+| Question | Decision |
+|---|---|
+| Task 1 backend | ✅ Opt-in, E2E-encrypted **Firebase** sync in a separate `family` flavor; the `offline` flavor stays zero-network |
+| Task 1 what syncs | ✅ **Only medicine and symptom records**, never transcripts or audio |
+| Task 2 "stop" | ✅ Halt **before Review/Save** (no mid-recording detection; too memory-heavy). The user can still cut a recording short with the stop button |
+| Task 2 override | ✅ Keep **"Keep as typed"** |
+| Task 3 60 s window | ✅ Counts from the **mic tap**, as before |
+| Task 3 trailing silence | ✅ No auto-stop on trailing silence. The **user taps stop** (or 60 s cap) |
+
+## Implementation status
+
+| Task | Where | Tests |
+|---|---|---|
+| 3 · silence gate | `audio/SpeechGate.kt` (VAD + gate), `audio/AudioRecorder.kt`, `CheckInViewModel.startRecording` | `SpeechGateTest` (9) |
+| 2 · name gate | `data/dgda/MedicineNameGate.kt`, `data/dgda/Phonetic.kt`, `CheckInViewModel.extract`, `HomeContent.RejectedNamesCard` | `MedicineNameGateTest` (7) |
+| 1 · family sync | `sync/SyncCore.kt` (crypto, invite, merge), `data/DiaryRepository.kt` (merge, tombstones), Room v2 migration, `src/family/.../FirestoreFamilySync.kt`, `ui/settings/FamilySharingCard.kt`, `firebase/firestore.rules` | `SyncCoreTest` (7) |
+
+Setup and usage for sync: [`FAMILY_SYNC_SETUP.md`](FAMILY_SYNC_SETUP.md).
+
+> The rest of this document is the original plan. Where it differs from the decisions above, the decisions win
+> (e.g. Task 3's 60 s now counts from the tap, and there is no trailing-silence stop).
 Base: `main` @ `f8e5fad` (pulled 2026-11-24).
 
 ---
@@ -51,7 +75,7 @@ tap mic
   │ speech detected                     │ 10 s pass with no speech
   ▼                                     ▼
 [RECORDING]  writes pre-roll + audio    [NO_SPEECH] stop, delete file, no Whisper call,
-  │          for up to 60 s from onset         show "Didn't hear anything, tap to try again"
+  │          until 60 s after the TAP          show "Didn't hear anything, tap to try again"
   │ 60 s reached OR user taps stop
   ▼
 auto-transcribe (the silent lead-in was never recorded, so Whisper gets only real audio)

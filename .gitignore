@@ -23,3 +23,6 @@ models/
 # Signing keys never go into git (use GitHub Actions secrets)
 *.jks
 *.keystore
+
+# Firebase config for the family flavor (project-specific; pass via CI secrets instead)
+google-services.json

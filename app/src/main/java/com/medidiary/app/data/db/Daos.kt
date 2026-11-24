@@ -30,14 +30,14 @@ interface DiaryDao {
     @Delete
     suspend fun deleteRecord(record: DiaryRecord)
 
-    @Query("SELECT * FROM diary_records WHERE loggedDate BETWEEN :from AND :to ORDER BY loggedDate DESC")
+    @Query("SELECT * FROM diary_records WHERE deleted = 0 AND loggedDate BETWEEN :from AND :to ORDER BY loggedDate DESC")
     fun observeRecords(from: Long, to: Long): Flow<List<DiaryRecord>>
 
-    @Query("SELECT * FROM diary_records WHERE loggedDate BETWEEN :from AND :to ORDER BY loggedDate ASC")
+    @Query("SELECT * FROM diary_records WHERE deleted = 0 AND loggedDate BETWEEN :from AND :to ORDER BY loggedDate ASC")
     suspend fun recordsBetween(from: Long, to: Long): List<DiaryRecord>
 
     /** The user's own medicine vocabulary (Task 2: a name saved before is never rejected). */
-    @Query("SELECT DISTINCT originalName FROM diary_records WHERE type = 'medicine'")
+    @Query("SELECT DISTINCT originalName FROM diary_records WHERE type = 'medicine' AND deleted = 0")
     suspend fun medicineNames(): List<String>
 
     @Query("DELETE FROM diary_records WHERE loggedDate < :cutoff")
@@ -49,6 +49,36 @@ interface DiaryDao {
 
     @Query("DELETE FROM diary_sessions")
     suspend fun deleteAll()
+
+    // ---- Family sharing --------------------------------------------------------------------
+
+    @Insert
+    suspend fun insertRecord(record: DiaryRecord): Long
+
+    @Query("SELECT * FROM diary_records WHERE uuid = :uuid LIMIT 1")
+    suspend fun recordByUuid(uuid: String): DiaryRecord?
+
+    @Query("SELECT * FROM diary_sessions WHERE sessionId = :id LIMIT 1")
+    suspend fun sessionById(id: Long): DiarySession?
+
+    @Query("SELECT * FROM diary_sessions WHERE uuid = :uuid LIMIT 1")
+    suspend fun sessionByUuid(uuid: String): DiarySession?
+
+    @Query("SELECT * FROM diary_records WHERE syncState = 'PENDING' ORDER BY updatedAt")
+    suspend fun pendingRecords(): List<DiaryRecord>
+
+    /** Only if nothing changed the row while it was being uploaded. */
+    @Query("UPDATE diary_records SET syncState = 'SYNCED' WHERE uuid = :uuid AND updatedAt = :updatedAt AND syncState = 'PENDING'")
+    suspend fun markSynced(uuid: String, updatedAt: Long)
+
+    @Query("UPDATE diary_records SET syncState = 'PENDING' WHERE syncState = 'LOCAL_ONLY'")
+    suspend fun markAllPending()
+
+    @Query("UPDATE diary_records SET syncState = 'LOCAL_ONLY'")
+    suspend fun markAllLocalOnly()
+
+    @Query("DELETE FROM diary_records WHERE deleted = 1")
+    suspend fun purgeTombstones()
 }
 
 @Dao

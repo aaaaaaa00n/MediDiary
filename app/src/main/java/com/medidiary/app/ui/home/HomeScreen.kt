@@ -35,11 +35,12 @@ fun HomeScreen(flowVm: CheckInViewModel, diaryVm: DiaryViewModel, onOpenSettings
     val amplitude by flowVm.recorder.amplitude.collectAsStateWithLifecycle()
     val elapsed by flowVm.recorder.elapsedMs.collectAsStateWithLifecycle()
     val phase by flowVm.recorder.phase.collectAsStateWithLifecycle()
+    val family by flowVm.familyState.collectAsStateWithLifecycle()
     val actions = rememberHomeActions(flowVm)
     LaunchedEffect(Unit) { flowVm.refreshMode() }
     // The recorder stops itself (10 s of silence / 60 s cap), so no timer-driven stop is needed here.
     HomeLayout(
-        ui = HomeUi(state, settings.asrLanguage, amplitude, elapsed, listening = phase == RecPhase.LISTENING),
+        ui = HomeUi(state, settings.asrLanguage, amplitude, elapsed, listening = phase == RecPhase.LISTENING, sharing = family.enabled),
         actions = actions,
         onOpenSettings = onOpenSettings,
         calendar = { onClose -> CalendarPanel(diaryVm, onClose) },

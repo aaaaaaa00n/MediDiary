@@ -65,6 +65,8 @@ data class CalendarUi(
     val selectedDay: Long?,
     val type: TypeFilter,
     val days: List<Pair<Long, List<DiaryRecord>>>,
+    /** Family sharing: entries written on another phone get a "by <name>" badge. */
+    val myDeviceId: String? = null,
 )
 
 interface CalendarActions {
@@ -161,7 +163,10 @@ fun ColumnScope.CalendarPanelContent(ui: CalendarUi, actions: CalendarActions, o
                 )
             }
             items(records, key = { it.id }) { r ->
-                EntryRow(r, timeFmt.format(Date(r.loggedDate)), onEdit = { editing = r }, onDelete = { deleting = r })
+                EntryRow(
+                    r, timeFmt.format(Date(r.loggedDate)), onEdit = { editing = r }, onDelete = { deleting = r },
+                    author = r.authorName?.takeIf { r.authorDevice != null && r.authorDevice != ui.myDeviceId },
+                )
             }
         }
     }
@@ -182,7 +187,7 @@ fun ColumnScope.CalendarPanelContent(ui: CalendarUi, actions: CalendarActions, o
             onDismissRequest = { deleting = null },
             containerColor = Mocha.Base,
             title = { Text("Delete entry?", color = Mocha.Text) },
-            text = { Text("“${r.originalName}” will be removed from this phone permanently.", color = Mocha.Subtext1) },
+            text = { Text("“${r.originalName}” will be deleted permanently (from every phone, if the diary is shared).", color = Mocha.Subtext1) },
             confirmButton = { TextButton(onClick = { actions.delete(r); deleting = null }) { Text("Delete", color = Mocha.Red) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel", color = Mocha.Subtext0) } },
         )
@@ -215,7 +220,7 @@ private fun DayCell(day: Long, marks: DayMarks?, isSelected: Boolean, isToday: B
 }
 
 @Composable
-private fun EntryRow(r: DiaryRecord, time: String, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun EntryRow(r: DiaryRecord, time: String, onEdit: () -> Unit, onDelete: () -> Unit, author: String? = null) {
     val med = r.type == RecordType.MEDICINE
     val accent = if (med) MedicineAccent else SymptomAccent
     Row(Modifier.fillMaxWidth().neumorphic(16.dp, 5.dp).padding(start = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -233,7 +238,10 @@ private fun EntryRow(r: DiaryRecord, time: String, onEdit: () -> Unit, onDelete:
                 r.note,
             ).joinToString(" · ")
             if (details.isNotEmpty()) Text(details, color = Mocha.Subtext1, style = MaterialTheme.typography.bodySmall)
-            Text("Logged $time", color = Mocha.Overlay0, style = MaterialTheme.typography.labelSmall)
+            Text(
+                if (author != null) "Logged $time · by $author" else "Logged $time",
+                color = if (author != null) Mocha.Teal else Mocha.Overlay0, style = MaterialTheme.typography.labelSmall,
+            )
         }
         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, "Edit", tint = Mocha.Subtext0) }
         IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete", tint = Mocha.Red) }

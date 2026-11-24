@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as MediDiaryApp).container
 
+    val myDeviceId: String = c.familyPrefs.deviceId
+
     val typeFilter = MutableStateFlow(TypeFilter.ALL)
     /** Start-of-day millis of the tapped date, or null for "all dates". */
     val selectedDay = MutableStateFlow<Long?>(null)

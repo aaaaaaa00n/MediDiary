@@ -8,10 +8,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- CORE RULE #1: zero cloud inference. Strip INTERNET/network permissions even if a library
-         tries to merge them in. `./gradlew :app:processReleaseManifest` + grep to double-check. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- CORE RULE #1: zero cloud inference. Network permissions are decided per flavor:
+         src/offline/AndroidManifest.xml strips them; src/family/AndroidManifest.xml adds them only
+         for opt-in encrypted family sync. CI checks both APKs. -->
 
     <application
         android:name=".MediDiaryApp"

@@ -10,6 +10,9 @@ import com.medidiary.app.data.dgda.DgdaLookupRepository
 import com.medidiary.app.data.dgda.DgdaSeeder
 import com.medidiary.app.export.ExportManager
 import com.medidiary.app.reminder.ReminderScheduler
+import com.medidiary.app.sync.FamilyPrefs
+import com.medidiary.app.sync.FamilySync
+import com.medidiary.app.sync.FamilySyncFactory
 import com.medidiary.app.work.RetentionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +23,10 @@ import kotlinx.coroutines.launch
 class AppContainer(app: Application) {
     val database = AppDatabase.build(app)
     val settings = SettingsStore(app)
-    val diaryRepository = DiaryRepository(database)
+    val familyPrefs = FamilyPrefs(app)
+    val diaryRepository = DiaryRepository(database, familyPrefs::identity) { familySync.requestSync() }
+    /** Task 1: no-op in the offline flavor, encrypted Firestore sync in the family flavor. */
+    val familySync: FamilySync by lazy { FamilySyncFactory.create(app, diaryRepository, familyPrefs, settings) }
     val dgdaLookup = DgdaLookupRepository(database)
     val modelManager = ModelManager(app)
     val pipeline = InferencePipeline(modelManager, settings)
@@ -47,5 +53,6 @@ class MediDiaryApp : Application() {
         RetentionWorker.schedule(this)
         ReminderScheduler.ensureChannel(this)
         ReminderScheduler.schedule(this, container.settings.settings.value)
+        container.familySync.start()
     }
 }

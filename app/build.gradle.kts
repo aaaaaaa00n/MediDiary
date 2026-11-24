@@ -10,6 +10,19 @@ plugins {
 val medidiaryAbis = (findProperty("medidiary.abis") as String? ?: "arm64-v8a")
     .split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
+// Family sync (Task 1): Firebase keys come from app/google-services.json (git-ignored) or from the
+// MEDIDIARY_FIREBASE_* environment variables (CI secrets). Without them the family build still
+// compiles and runs; Settings just says sync isn't configured.
+val firebaseConfig: Map<String, String> = run {
+    val json = listOf("google-services.json", "src/family/google-services.json").map { file(it) }.firstOrNull { it.exists() }?.readText()
+    fun fromJson(field: String) = json?.let { Regex("\"$field\"\\s*:\\s*\"([^\"]+)\"").find(it)?.groupValues?.get(1) }
+    mapOf(
+        "FIREBASE_API_KEY" to (System.getenv("MEDIDIARY_FIREBASE_API_KEY") ?: fromJson("current_key")),
+        "FIREBASE_APP_ID" to (System.getenv("MEDIDIARY_FIREBASE_APP_ID") ?: fromJson("mobilesdk_app_id")),
+        "FIREBASE_PROJECT_ID" to (System.getenv("MEDIDIARY_FIREBASE_PROJECT_ID") ?: fromJson("project_id")),
+    ).mapValues { (_, v) -> v.orEmpty().filter { it.isLetterOrDigit() || it in "-_:." } }
+}
+
 android {
     namespace = "com.medidiary.app"
     compileSdk = 35
@@ -75,7 +88,26 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    // offline: the original zero-network app (no INTERNET permission; CI enforces it).
+    // family:  same app + opt-in, end-to-end-encrypted family sync of verified entries (Task 1).
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("offline") {
+            dimension = "distribution"
+            isDefault = true
+        }
+        create("family") {
+            dimension = "distribution"
+            applicationIdSuffix = ".family"
+            versionNameSuffix = "-family"
+            firebaseConfig.forEach { (k, v) -> buildConfigField("String", k, "\"$v\"") }
+        }
+    }
 
     androidResources {
         // Never let aapt compress large binary assets (if a team member bundles a model for a demo).
@@ -110,6 +142,13 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    "familyImplementation"(platform(libs.firebase.bom))
+    "familyImplementation"(libs.firebase.firestore)
+    "familyImplementation"(libs.firebase.auth)
+    "familyImplementation"(libs.kotlinx.coroutines.play.services)
+    "familyImplementation"(libs.zxing.core)
+    "familyImplementation"(libs.zxing.android.embedded)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

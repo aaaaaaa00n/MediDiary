@@ -66,6 +66,8 @@ data class SettingsUi(
     val exporting: Boolean,
     /** False when the OS blocks MediDiary's notifications (Android 13+ permission, or switched off). */
     val notificationsAllowed: Boolean = true,
+    /** Family build: the app may sync verified entries (encrypted) when the user turns sharing on. */
+    val familySharingAvailable: Boolean = false,
 )
 
 interface SettingsActions {
@@ -80,7 +82,14 @@ interface SettingsActions {
 }
 
 @Composable
-fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, onBack: () -> Unit) {
+fun SettingsContent(
+    s: AppSettings,
+    ui: SettingsUi,
+    actions: SettingsActions,
+    onBack: () -> Unit,
+    /** Task 1: the FAMILY SHARING card (stateful, so it is passed in; empty in previews / offline build). */
+    familySharing: @Composable () -> Unit = {},
+) {
     val message = ui.message
     val exportRange = ui.exportRange
     val exporting = ui.exporting
@@ -117,6 +126,8 @@ fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, on
                 placeholder = "Patient name",
             )
         }
+
+        familySharing()
 
         // ---- LOAD MODEL -----------------------------------------------------------------------
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,8 +243,14 @@ fun SettingsContent(s: AppSettings, ui: SettingsUi, actions: SettingsActions, on
         NeuCard(Modifier.fillMaxWidth()) {
             SectionLabel("Privacy", color = Mocha.Green)
             Text(
-                "MediDiary has no internet permission. Recordings, transcripts and diary entries never leave this phone " +
-                    "unless you export and share them. Raw audio is deleted right after transcription.",
+                if (ui.familySharingAvailable) {
+                    "Speech recognition and AI extraction run only on this phone. Recordings and transcripts never leave it, and raw " +
+                        "audio is deleted right after transcription. If you turn on Family sharing, only the entries you confirm are " +
+                        "sent, end-to-end encrypted, to the phones in your family diary."
+                } else {
+                    "MediDiary has no internet permission. Recordings, transcripts and diary entries never leave this phone " +
+                        "unless you export and share them. Raw audio is deleted right after transcription."
+                },
                 color = Mocha.Subtext1, style = MaterialTheme.typography.bodySmall,
             )
             NeuButton({ confirmWipe = true }, accent = Mocha.Red, alwaysAccent = true) { Text("Delete all diary data") }

@@ -37,6 +37,9 @@ class CheckInViewModel(app: Application) : AndroidViewModel(app) {
     /** App settings (the EN | BN toggle on the home screen reads/writes the speech language). */
     val settings = c.settings.settings
 
+    /** For the "shared with family" hint on the home screen. */
+    val familyState = c.familySync.state
+
     fun setAsrLanguage(code: String) = c.settings.update { it.copy(asrLanguage = code) }
 
     fun refreshMode() = _state.update { it.copy(mockMode = c.pipeline.isMockMode()) }

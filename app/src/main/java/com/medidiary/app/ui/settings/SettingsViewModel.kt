@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as MediDiaryApp).container
     val settings = c.settings.settings
+    val familySync = c.familySync
     val models = c.modelManager.status
     val importing = MutableStateFlow<Pair<ModelKind, Long>?>(null)
     val message = MutableStateFlow<String?>(null)
@@ -85,7 +86,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteAllData() = viewModelScope.launch {
+        // While sharing, the other phone would just send everything back: stop sharing first.
+        val wasSharing = c.familySync.state.value.enabled
+        if (wasSharing) c.familySync.leave()
         c.diaryRepository.deleteAll()
-        message.value = "All diary entries deleted from this phone."
+        message.value = if (wasSharing) "Stopped family sharing and deleted all diary entries from this phone."
+        else "All diary entries deleted from this phone."
     }
 }

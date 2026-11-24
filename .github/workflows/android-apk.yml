@@ -1,6 +1,8 @@
 name: Android APK
 
-# Builds the side-loadable MediDiary APK.
+# Builds the side-loadable MediDiary APKs (two flavors):
+#  • offline → MediDiary-<v>.apk         no network permission at all (enforced below)
+#  • family  → MediDiary-<v>-family.apk  + opt-in end-to-end-encrypted family sync (INTERNET only)
 #  • every push / pull request → unit tests + APK artifact (downloadable from the run page)
 #  • push a tag like v1.0.0      → also publishes a GitHub Release with the APK attached (direct link for judges)
 # Model files (Whisper / Gemma) are never part of the APK; see README "Model files".
@@ -74,7 +76,7 @@ jobs:
             cxx-${{ env.NDK_VERSION }}-${{ steps.native.outputs.sub }}-
 
       - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :app:testOfflineDebugUnitTest :app:testFamilyDebugUnitTest --stacktrace
 
       - name: Decode release keystore (optional)
         if: env.HAS_KEYSTORE == 'true'
@@ -89,43 +91,56 @@ jobs:
           MEDIDIARY_KEYSTORE_PASSWORD: ${{ secrets.MEDIDIARY_KEYSTORE_PASSWORD }}
           MEDIDIARY_KEY_ALIAS: ${{ secrets.MEDIDIARY_KEY_ALIAS }}
           MEDIDIARY_KEY_PASSWORD: ${{ secrets.MEDIDIARY_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease --stacktrace
+          # Optional: without these the family APK builds but shows "sync not configured".
+          MEDIDIARY_FIREBASE_API_KEY: ${{ secrets.MEDIDIARY_FIREBASE_API_KEY }}
+          MEDIDIARY_FIREBASE_APP_ID: ${{ secrets.MEDIDIARY_FIREBASE_APP_ID }}
+          MEDIDIARY_FIREBASE_PROJECT_ID: ${{ secrets.MEDIDIARY_FIREBASE_PROJECT_ID }}
+        run: ./gradlew :app:assembleOfflineRelease :app:assembleFamilyRelease --stacktrace
 
-      - name: Verify APK (no network permission, native libs, signature)
+      - name: Verify APKs (permissions, native libs, signature)
         run: |
-          APK=app/build/outputs/apk/release/app-release.apk
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          echo "## MediDiary APK" >> "$GITHUB_STEP_SUMMARY"
-
-          "$BT/aapt2" dump permissions "$APK" | tee permissions.txt
-          if grep -qE "android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)" permissions.txt; then
-            echo "::error::Network permission found in the APK — MediDiary must stay 100% offline."
-            exit 1
-          fi
-
-          for lib in libmedidiary_whisper.so libmedidiary_llama.so; do
-            unzip -l "$APK" | grep -q "lib/arm64-v8a/$lib" || { echo "::error::$lib missing from APK"; exit 1; }
+          echo "## MediDiary APKs" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Flavor | File | Size | SHA-256 | Network permissions |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for FLAVOR in offline family; do
+            APK=app/build/outputs/apk/$FLAVOR/release/app-$FLAVOR-release.apk
+            "$BT/aapt2" dump permissions "$APK" | tee "permissions-$FLAVOR.txt"
+            NET=$(grep -oE "android\.permission\.[A-Z_]*(INTERNET|NETWORK)[A-Z_]*" "permissions-$FLAVOR.txt" | sort -u | tr '\n' ' ')
+            if [ "$FLAVOR" = offline ] && [ -n "$NET" ]; then
+              echo "::error::Network permission found in the offline APK ($NET). It must stay 100% offline."
+              exit 1
+            fi
+            if [ "$FLAVOR" = family ]; then
+              EXTRA=$(grep -oE "android\.permission\.[A-Z_]*(INTERNET|NETWORK)[A-Z_]*" "permissions-$FLAVOR.txt" | sort -u \
+                | grep -vE "^android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)$" || true)
+              [ -z "$EXTRA" ] || { echo "::error::Unexpected network permission in the family APK: $EXTRA"; exit 1; }
+            fi
+            for lib in libmedidiary_whisper.so libmedidiary_llama.so; do
+              unzip -l "$APK" | grep -q "lib/arm64-v8a/$lib" || { echo "::error::$lib missing from $FLAVOR APK"; exit 1; }
+            done
+            "$BT/apksigner" verify --print-certs "$APK" | tee "signing-$FLAVOR.txt"
+            if [ "$FLAVOR" = offline ]; then OUT="MediDiary-${MEDIDIARY_VERSION_NAME}.apk"; else OUT="MediDiary-${MEDIDIARY_VERSION_NAME}-family.apk"; fi
+            cp "$APK" "$OUT"
+            echo "APK_${FLAVOR^^}=$OUT" >> "$GITHUB_ENV"
+            echo "| $FLAVOR | \`$OUT\` | $(du -h "$OUT" | cut -f1) | \`$(sha256sum "$OUT" | cut -c1-16)…\` | ${NET:-none ✅} |" >> "$GITHUB_STEP_SUMMARY"
           done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version ${MEDIDIARY_VERSION_NAME} (code ${GITHUB_RUN_NUMBER}) · signing: $([ "$HAS_KEYSTORE" = true ] && echo 'release key (secrets)' || echo 'CI debug key, uninstall before installing a newer build')" >> "$GITHUB_STEP_SUMMARY"
 
-          "$BT/apksigner" verify --print-certs "$APK" | tee signing.txt
-          OUT="MediDiary-${MEDIDIARY_VERSION_NAME}.apk"
-          cp "$APK" "$OUT"
-          echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
-          {
-            echo "| | |"; echo "|---|---|"
-            echo "| File | \`$OUT\` |"
-            echo "| Size | $(du -h "$OUT" | cut -f1) |"
-            echo "| SHA-256 | \`$(sha256sum "$OUT" | cut -d' ' -f1)\` |"
-            echo "| Version | ${MEDIDIARY_VERSION_NAME} (code ${GITHUB_RUN_NUMBER}) |"
-            echo "| Signing | $([ "$HAS_KEYSTORE" = true ] && echo 'release key (secrets)' || echo 'CI debug key — uninstall before installing a newer build') |"
-            echo "| Network permissions | none ✅ |"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload APK
+      - name: Upload offline APK
         uses: actions/upload-artifact@v7
         with:
-          path: ${{ env.APK_PATH }}
+          path: ${{ env.APK_OFFLINE }}
           archive: false # download the .apk directly, not a zip
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload family APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.APK_FAMILY }}
+          archive: false
           retention-days: 30
           if-no-files-found: error
 
@@ -143,7 +158,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ env.APK_PATH }}
+          files: |
+            ${{ env.APK_OFFLINE }}
+            ${{ env.APK_FAMILY }}
           generate_release_notes: true
           body: |
             **MediDiary ${{ env.MEDIDIARY_VERSION_NAME }}** — offline, bilingual (Bangla + English) health diary.

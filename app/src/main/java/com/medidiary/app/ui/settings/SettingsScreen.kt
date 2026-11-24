@@ -72,7 +72,10 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
 
     SettingsContent(
         s = s,
-        ui = SettingsUi(message, models.whisper != null, models.gemma != null, exportRange, exporting, notificationsAllowed),
+        ui = SettingsUi(
+            message, models.whisper != null, models.gemma != null, exportRange, exporting, notificationsAllowed,
+            familySharingAvailable = vm.familySync.supported,
+        ),
         actions = remember(vm) {
             object : SettingsActions {
                 override fun update(transform: (AppSettings) -> AppSettings) = vm.update(transform)
@@ -88,6 +91,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             }
         },
         onBack = onBack,
+        familySharing = { if (vm.familySync.supported) FamilySharingCard(vm.familySync) },
     )
     if (showModels) ModelsDialog(vm, models.whisper, models.gemma) { showModels = false }
 }

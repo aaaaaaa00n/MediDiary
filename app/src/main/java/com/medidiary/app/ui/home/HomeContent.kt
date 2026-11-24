@@ -105,6 +105,8 @@ data class HomeUi(
     val elapsedMs: Long = 0L,
     /** Mic is open but no speech yet (first 10 s silence gate). */
     val listening: Boolean = false,
+    /** Family sharing is on for this phone. */
+    val sharing: Boolean = false,
 )
 
 /** Everything the home screen can ask for. Implemented by [rememberHomeActions] over the ViewModel. */
@@ -186,7 +188,10 @@ fun HomeContent(ui: HomeUi, actions: HomeActions, onOpenSettings: () -> Unit, on
             }
             Column(Modifier.weight(1f)) {
                 Text("MediDiary", style = MaterialTheme.typography.titleLarge, color = Mocha.Text, fontWeight = FontWeight.Bold)
-                Text("Private · works offline", style = MaterialTheme.typography.labelSmall, color = Mocha.Overlay1)
+                Text(
+                    if (ui.sharing) "On-device AI · shared with family, encrypted" else "Private · works offline",
+                    style = MaterialTheme.typography.labelSmall, color = if (ui.sharing) Mocha.Teal else Mocha.Overlay1,
+                )
             }
             NeuIconButton(Icons.Filled.Settings, "Settings", onOpenSettings, tint = Mocha.Mauve)
         }
@@ -208,7 +213,10 @@ fun HomeContent(ui: HomeUi, actions: HomeActions, onOpenSettings: () -> Unit, on
         if (state.rejected.isNotEmpty()) RejectedNamesCard(state, actions)
         VoiceModelCard(ui, actions)
         TranscriptionCard(state, actions)
-        if (state.proposals.isNotEmpty() || state.rawModelOutput != null) ReviewCard(state, actions, onEdit = { editing = it })
+        // Task 2: while a name is rejected the check-in is stopped, so Review (and Save) stays hidden.
+        if (state.rejected.isEmpty() && (state.proposals.isNotEmpty() || state.rawModelOutput != null)) {
+            ReviewCard(state, actions, onEdit = { editing = it })
+        }
         Spacer(Modifier.height(24.dp))
     }
 
