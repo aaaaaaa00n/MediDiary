@@ -139,6 +139,7 @@ class FirestoreFamilySync(
         FamilySyncWorker.schedule(app)
         scope.launch {
             runCatching { ensureSignedIn() }.onFailure { refresh("Can't reach the sync service yet: ${it.message}") }
+            repo.fillMissingAuthor()
             listen()
             push()
         }

@@ -67,6 +67,8 @@ data class CalendarUi(
     val days: List<Pair<Long, List<DiaryRecord>>>,
     /** Family sharing: entries written on another phone get a "by <name>" badge. */
     val myDeviceId: String? = null,
+    /** Family sharing is on: every entry shows who added it ("by Sifat" / "by you"). */
+    val sharing: Boolean = false,
 )
 
 interface CalendarActions {
@@ -165,7 +167,11 @@ fun ColumnScope.CalendarPanelContent(ui: CalendarUi, actions: CalendarActions, o
             items(records, key = { it.id }) { r ->
                 EntryRow(
                     r, timeFmt.format(Date(r.loggedDate)), onEdit = { editing = r }, onDelete = { deleting = r },
-                    author = r.authorName?.takeIf { r.authorDevice != null && r.authorDevice != ui.myDeviceId },
+                    author = when {
+                        !ui.sharing -> null
+                        r.authorDevice == null || r.authorDevice == ui.myDeviceId -> "you"
+                        else -> r.authorName ?: "family"
+                    },
                 )
             }
         }
@@ -178,7 +184,11 @@ fun ColumnScope.CalendarPanelContent(ui: CalendarUi, actions: CalendarActions, o
     ) {
         Icon(Icons.Outlined.EditNote, null, tint = Mocha.Green)
         Spacer(Modifier.width(8.dp))
-        Text("Edits and deletions are saved instantly on this phone.", color = Mocha.Subtext0, style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (ui.sharing) "Edits and deletions are saved instantly and synced to the family's phones."
+            else "Edits and deletions are saved instantly on this phone.",
+            color = Mocha.Subtext0, style = MaterialTheme.typography.bodySmall,
+        )
     }
 
     editing?.let { r -> DiaryRecordEditDialog(r, onDismiss = { editing = null }, onSave = { actions.update(it); editing = null }) }

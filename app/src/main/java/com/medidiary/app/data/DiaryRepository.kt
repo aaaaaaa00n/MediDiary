@@ -123,7 +123,17 @@ class DiaryRepository(
     suspend fun markSynced(uuid: String, updatedAt: Long) = dao.markSynced(uuid, updatedAt)
 
     /** Starting or joining a shared diary: upload everything already on this phone. */
-    suspend fun markAllPending() = dao.markAllPending()
+    /** Called when sync starts: give this phone's unnamed, already-shared entries its name. */
+    suspend fun fillMissingAuthor() {
+        val id = identity()
+        if (id.sharing && id.myName.isNotBlank()) dao.stampAuthorAndResend(id.myName, id.deviceId)
+    }
+
+    suspend fun markAllPending() = db.withTransaction {
+        val id = identity()
+        if (id.myName.isNotBlank()) dao.stampAuthor(id.myName, id.deviceId)
+        dao.markAllPending()
+    }
 
     /** Leaving: keep the entries on this phone, forget the sync bookkeeping. */
     suspend fun onLeftSharing() = db.withTransaction {

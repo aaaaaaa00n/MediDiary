@@ -20,8 +20,9 @@ fun ColumnScope.CalendarPanel(vm: DiaryViewModel, onClose: (() -> Unit)?) {
     val selected by vm.selectedDay.collectAsStateWithLifecycle()
     val type by vm.typeFilter.collectAsStateWithLifecycle()
     val days by vm.days.collectAsStateWithLifecycle()
+    val family by vm.familyState.collectAsStateWithLifecycle()
     CalendarPanelContent(
-        CalendarUi(month, marks, selected, type, days, myDeviceId = vm.myDeviceId),
+        CalendarUi(month, marks, selected, type, days, myDeviceId = vm.myDeviceId, sharing = family.enabled),
         actions = remember(vm) {
             object : CalendarActions {
                 override fun shiftMonth(delta: Int) = vm.shiftMonth(delta)

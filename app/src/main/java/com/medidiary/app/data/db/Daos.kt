@@ -74,6 +74,21 @@ interface DiaryDao {
     @Query("UPDATE diary_records SET syncState = 'PENDING' WHERE syncState = 'LOCAL_ONLY'")
     suspend fun markAllPending()
 
+    /** Entries made on this phone before it had a family name get one (and an author device). */
+    @Query(
+        "UPDATE diary_records SET authorName = :name, authorDevice = :device " +
+            "WHERE authorName IS NULL AND (authorDevice IS NULL OR authorDevice = :device)",
+    )
+    suspend fun stampAuthor(name: String, device: String)
+
+    /** Same, for entries already shared without a name: re-upload them with it (newer stamp wins). */
+    @Query(
+        "UPDATE diary_records SET authorName = :name, authorDevice = :device, updatedAt = updatedAt + 1, " +
+            "updatedBy = :device, syncState = 'PENDING' " +
+            "WHERE syncState = 'SYNCED' AND authorName IS NULL AND (authorDevice IS NULL OR authorDevice = :device)",
+    )
+    suspend fun stampAuthorAndResend(name: String, device: String): Int
+
     @Query("UPDATE diary_records SET syncState = 'LOCAL_ONLY'")
     suspend fun markAllLocalOnly()
 

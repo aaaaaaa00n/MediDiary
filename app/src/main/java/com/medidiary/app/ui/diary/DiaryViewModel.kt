@@ -20,6 +20,7 @@ class DiaryViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as MediDiaryApp).container
 
     val myDeviceId: String = c.familyPrefs.deviceId
+    val familyState = c.familySync.state
 
     val typeFilter = MutableStateFlow(TypeFilter.ALL)
     /** Start-of-day millis of the tapped date, or null for "all dates". */
