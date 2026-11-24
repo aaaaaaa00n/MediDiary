@@ -14,8 +14,8 @@ exists only on the family's phones. Audio and transcripts never leave the phone.
 ## One-time Firebase setup (≈10 min)
 
 1. <https://console.firebase.google.com> → **Add project** (Analytics not needed).
-2. **Build → Authentication → Get started → Sign-in method → Anonymous → Enable.**
-3. **Build → Firestore Database → Create database** (production mode, a region near Bangladesh,
+2. **Authentication** (Project shortcuts / Security; older consoles: Build → Authentication) **→ Sign-in method → Anonymous → Enable.**
+3. **Databases & Storage → Firestore → Create database** (older consoles: Build → Firestore Database; default database ID, production mode, a region near Bangladesh,
    e.g. `asia-south1`).
 4. Firestore → **Rules** → paste [`firebase/firestore.rules`](../firebase/firestore.rules) → **Publish**.
 5. Project settings → **Add app → Android**, package name **`com.medidiary.app.family`** →
