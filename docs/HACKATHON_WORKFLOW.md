@@ -21,7 +21,7 @@ Status: **Decisions agreed (see below). All three tasks implemented on branch `c
 | 2 · name gate | `data/dgda/MedicineNameGate.kt`, `data/dgda/Phonetic.kt`, `CheckInViewModel.extract`, `HomeContent.RejectedNamesCard` | `MedicineNameGateTest` (7) |
 | 1 · family sync | `sync/SyncCore.kt` (crypto, invite, merge), `data/DiaryRepository.kt` (merge, tombstones), Room v2 migration, `src/family/.../FirestoreFamilySync.kt`, `ui/settings/FamilySharingCard.kt`, `firebase/firestore.rules` | `SyncCoreTest` (7) |
 
-Setup and usage for sync: [`FAMILY_SYNC_SETUP.md`](FAMILY_SYNC_SETUP.md).
+Setup and usage for sync: [`FAMILY_SYNC_SETUP.md`](FAMILY_SYNC_SETUP.md) · step-by-step two-phone guide: [`MediDiary_Family_Sync_Setup.pdf`](MediDiary_Family_Sync_Setup.pdf).
 
 > The rest of this document is the original plan. Where it differs from the decisions above, the decisions win
 > (e.g. Task 3's 60 s now counts from the tap, and there is no trailing-silence stop).
