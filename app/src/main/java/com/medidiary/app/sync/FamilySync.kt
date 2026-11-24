@@ -18,6 +18,8 @@ data class FamilyState(
     val lastSyncAt: Long? = null,
     val syncing: Boolean = false,
     val error: String? = null,
+    /** Firebase project the build points at (shown so it can be compared with the console). */
+    val projectId: String = "",
 )
 
 /**

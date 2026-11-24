@@ -24,6 +24,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -103,6 +105,7 @@ class FirestoreFamilySync(
         lastSyncAt = prefs.lastSyncAt.takeIf { it > 0 },
         syncing = syncing,
         error = error,
+        projectId = BuildConfig.FIREBASE_PROJECT_ID,
     )
 
     private fun refresh(error: String? = null, syncing: Boolean = false) {
@@ -141,16 +144,53 @@ class FirestoreFamilySync(
     }
 
     private suspend fun ensureSignedIn() {
-        if (auth.currentUser == null) auth.signInAnonymously().await()
+        if (auth.currentUser != null) return
+        val result = withTimeoutOrNull(20_000) { runCatching { auth.signInAnonymously().await() } }
+            ?: error("Couldn't reach Firebase sign-in in 20 s. Check this phone's internet connection.")
+        result.exceptionOrNull()?.let { e ->
+            Log.w(TAG, "anonymous sign-in", e)
+            error(
+                "Firebase sign-in failed: ${e.message}. In the Firebase console, open Authentication → " +
+                    "Sign-in method and enable Anonymous.",
+            )
+        }
     }
 
     private suspend fun registerMember(diaryId: String) {
         ensureSignedIn()
         val uid = requireNotNull(auth.currentUser).uid
+        val member = diaryRef(diaryId).collection("members").document(uid)
+        // A server READ fails fast with the real reason (missing database, wrong project id, API
+        // blocked, rules not published), whereas a write just waits in the offline queue.
+        val probe = withTimeoutOrNull(20_000) { runCatching { member.get(Source.SERVER).await() } }
+            ?: error("Can't reach Firestore for project '${BuildConfig.FIREBASE_PROJECT_ID}' in 20 s. Check the internet connection.")
+        probe.exceptionOrNull()?.let { e ->
+            Log.w(TAG, "firestore probe", e)
+            error(explain(e))
+        }
         // Membership must exist before rules let us read the records; wait for the server briefly.
-        withTimeoutOrNull(15_000) {
-            diaryRef(diaryId).collection("members").document(uid).set(mapOf("j" to System.currentTimeMillis())).await()
-        } ?: error("No connection. Check the internet and try again.")
+        withTimeoutOrNull(20_000) {
+            member.set(mapOf("j" to System.currentTimeMillis())).await()
+        } ?: error("Firestore didn't confirm the write in 20 s (project '${BuildConfig.FIREBASE_PROJECT_ID}'). Check the internet connection.")
+    }
+
+    /** Turns a Firestore failure into something the team can act on in the Firebase console. */
+    private fun explain(e: Throwable): String {
+        val project = BuildConfig.FIREBASE_PROJECT_ID
+        val code = (e as? FirebaseFirestoreException)?.code
+        return when (code) {
+            FirebaseFirestoreException.Code.NOT_FOUND ->
+                "No Firestore database in project '$project'. Firebase console → Build → Firestore Database → Create database " +
+                    "(default database, production mode), then publish firebase/firestore.rules."
+            FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                "Firestore refused access in project '$project'. Publish firebase/firestore.rules (Firestore → Rules) and enable " +
+                    "Anonymous sign-in. If the API key is restricted in Google Cloud, allow the Cloud Firestore API. (${e.message})"
+            FirebaseFirestoreException.Code.FAILED_PRECONDITION ->
+                "Firestore isn't ready in project '$project': ${e.message}"
+            FirebaseFirestoreException.Code.UNAVAILABLE ->
+                "Firestore is unreachable from this network: ${e.message}"
+            else -> "Firestore error in project '$project' (${code ?: e.javaClass.simpleName}): ${e.message}"
+        }
     }
 
     // ---- create / join / leave ---------------------------------------------------------------

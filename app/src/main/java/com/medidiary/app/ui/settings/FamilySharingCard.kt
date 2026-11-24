@@ -89,6 +89,9 @@ fun FamilySharingCard(sync: FamilySync) {
             )
         }
         problem?.let { MessageBanner(it, BannerKind.ERROR) }
+        if (st.projectId.isNotBlank()) {
+            Text("Sync project: ${st.projectId}", color = Mocha.Overlay1, style = MaterialTheme.typography.labelSmall)
+        }
 
         if (!st.enabled) {
             Text(
